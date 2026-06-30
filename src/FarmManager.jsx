@@ -66,7 +66,7 @@ export default function FarmManager() {
 
 function CenterMsg({ children }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f7f0", color: "#2f5e3a", fontFamily: "system-ui" }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f6fa", color: "#1e3a5f", fontFamily: "system-ui" }}>
       {children}
     </div>
   );
@@ -86,20 +86,22 @@ function Login() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f7f0", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
-        <div style={{ fontSize: 30, textAlign: "center", marginBottom: 6 }}>🐄</div>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "#1f2d24" }}>Farm Manager</h1>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#7a8c7f", textAlign: "center" }}>Sign in to access your farm records</p>
+        <div style={{ textAlign: "center", marginBottom: 14 }}>
+          <img src="/logo.jpeg" alt="Farm logo" style={{ width: 160, maxWidth: "70%", height: "auto", borderRadius: 12 }} />
+        </div>
+        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "#1e3a5f" }}>Farm Manager</h1>
+        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8a93a8", textAlign: "center" }}>Sign in to access your farm records</p>
         <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Email</label>
         <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoCapitalize="none" placeholder="you@example.com"
-          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdddcd", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "#fbfdfb" }} />
+          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "#fbfcfe" }} />
         <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Password</label>
         <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••"
           onKeyDown={(e) => e.key === "Enter" && signIn()}
-          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdddcd", fontSize: 15, boxSizing: "border-box", marginBottom: 16, background: "#fbfdfb" }} />
+          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", marginBottom: 16, background: "#fbfcfe" }} />
         {err && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 12 }}>{err}</div>}
-        <button onClick={signIn} disabled={busy} style={{ width: "100%", background: "#2f5e3a", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+        <button onClick={signIn} disabled={busy} style={{ width: "100%", background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </div>
@@ -146,11 +148,12 @@ function FarmApp({ onSignOut }) {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f7f0", fontFamily: "system-ui, -apple-system, sans-serif", color: "#1f2d24", paddingBottom: 76 }}>
-      <header style={{ background: "#2f5e3a", color: "white", padding: "16px 18px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
-          🐄 Farm Manager
-        </h1>
+    <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", color: "#1f2d24", paddingBottom: 76 }}>
+      <header style={{ background: "#1e3a5f", color: "white", padding: "12px 16px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "3px solid #e8b923" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img src="/logo.jpeg" alt="logo" style={{ height: 38, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
+          <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Farm Manager</h1>
+        </div>
         <div style={{ display: "flex", gap: 14 }}>
           <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><RefreshCw size={19} /></button>
           <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><LogOut size={19} /></button>
@@ -167,16 +170,16 @@ function FarmApp({ onSignOut }) {
         {tab === "construction" && <Construction {...{ construction, setConstruction }} />}
       </main>
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d6e3d6", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
         {tabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               flex: 1, border: "none", background: "none", padding: "8px 1px 10px",
-              color: active ? "#2f5e3a" : "#8aa092", display: "flex", flexDirection: "column",
+              color: active ? "#1e3a5f" : "#8a93a8", display: "flex", flexDirection: "column",
               alignItems: "center", gap: 3, cursor: "pointer", fontSize: 10, fontWeight: active ? 700 : 500,
-              minWidth: 0,
+              minWidth: 0, borderTop: active ? "3px solid #e8b923" : "3px solid transparent", marginTop: -1,
             }}>
               <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
               {t.label}
@@ -190,9 +193,9 @@ function FarmApp({ onSignOut }) {
 
 // ---------- reusable UI ----------
 const card = { background: "white", borderRadius: 14, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 14 };
-const inputStyle = { width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdddcd", fontSize: 15, boxSizing: "border-box", background: "#fbfdfb" };
+const inputStyle = { width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", background: "#fbfcfe" };
 const labelStyle = { fontSize: 13, fontWeight: 600, color: "#3a4a3f", marginBottom: 5, display: "block" };
-const primaryBtn = { background: "#2f5e3a", color: "white", border: "none", borderRadius: 10, padding: "12px 16px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 };
+const primaryBtn = { background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "12px 16px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 };
 
 function Field({ label, children }) {
   return <div style={{ marginBottom: 12 }}><label style={labelStyle}>{label}</label>{children}</div>;
@@ -203,7 +206,7 @@ function SectionHeader({ title, onAdd, addLabel = "Add", onExport }) {
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
       <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{title}</h2>
       <div style={{ display: "flex", gap: 8 }}>
-        {onExport && <button onClick={onExport} title="Export CSV" style={{ ...primaryBtn, background: "white", color: "#2f5e3a", border: "1px solid #cdddcd", padding: "12px" }}><Download size={18} /></button>}
+        {onExport && <button onClick={onExport} title="Export CSV" style={{ ...primaryBtn, background: "white", color: "#1e3a5f", border: "1px solid #cdd6e6", padding: "12px" }}><Download size={18} /></button>}
         {onAdd && <button onClick={onAdd} style={primaryBtn}><Plus size={18} />{addLabel}</button>}
       </div>
     </div>
@@ -216,7 +219,7 @@ function Modal({ title, onClose, children }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: "white", borderRadius: "18px 18px 0 0", padding: 20, width: "100%", maxWidth: 560, maxHeight: "88vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h3>
-          <button onClick={onClose} style={{ border: "none", background: "#eef3ee", borderRadius: 8, padding: 6, cursor: "pointer" }}><X size={20} /></button>
+          <button onClick={onClose} style={{ border: "none", background: "#eef1f7", borderRadius: 8, padding: 6, cursor: "pointer" }}><X size={20} /></button>
         </div>
         {children}
       </div>
@@ -226,7 +229,7 @@ function Modal({ title, onClose, children }) {
 
 function Empty({ icon: Icon, text }) {
   return (
-    <div style={{ textAlign: "center", padding: "40px 20px", color: "#8aa092" }}>
+    <div style={{ textAlign: "center", padding: "40px 20px", color: "#8a93a8" }}>
       <Icon size={42} strokeWidth={1.4} style={{ marginBottom: 10 }} />
       <p style={{ margin: 0, fontSize: 14 }}>{text}</p>
     </div>
@@ -262,9 +265,9 @@ function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
       <h2 style={{ margin: "0 0 14px", fontSize: 19, fontWeight: 700 }}>Overview</h2>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
         {stat("This month's expenses", fmt(monthExpense), "All categories", "#c0392b")}
-        {stat("Milk today", fmt(todayMilk) + " L", todayStr(), "#2f5e3a")}
+        {stat("Milk today", fmt(todayMilk) + " L", todayStr(), "#1e3a5f")}
         {stat("Total spent", fmt(totalExpense), `${expenses.length} entries`, "#3a4a3f")}
-        {stat("Medicines", medicines.length, `${lowStock.length} low stock`, "#2f5e3a")}
+        {stat("Medicines", medicines.length, `${lowStock.length} low stock`, "#1e3a5f")}
       </div>
 
       {(lowStock.length > 0 || expExpiring.length > 0) && (
@@ -279,14 +282,14 @@ function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
 
       <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={18} /> Spending by category</div>
-        {byCat.length === 0 ? <div style={{ color: "#8aa092", fontSize: 14 }}>No expenses recorded yet.</div> :
+        {byCat.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 14 }}>No expenses recorded yet.</div> :
           byCat.map(([cat, amt]) => (
             <div key={cat} style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
                 <span style={{ fontWeight: 600 }}>{cat}</span><span>{fmt(amt)}</span>
               </div>
-              <div style={{ background: "#e8f0e8", borderRadius: 6, height: 8 }}>
-                <div style={{ width: `${(amt / maxCat) * 100}%`, background: "#5a8c6a", height: 8, borderRadius: 6 }} />
+              <div style={{ background: "#eef1f7", borderRadius: 6, height: 8 }}>
+                <div style={{ width: `${(amt / maxCat) * 100}%`, background: "#c79a2e", height: 8, borderRadius: 6 }} />
               </div>
             </div>
           ))}
@@ -342,13 +345,13 @@ function Expenses({ expenses, setExpenses }) {
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
         {["All", ...EXPENSE_CATEGORIES].map((c) => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
-            whiteSpace: "nowrap", border: "1px solid #cdddcd", borderRadius: 20, padding: "6px 12px", fontSize: 13,
-            background: filterCat === c ? "#2f5e3a" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
+            whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+            background: filterCat === c ? "#1e3a5f" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
           }}>{c}</button>
         ))}
       </div>
 
-      <div style={{ ...card, padding: "12px 16px", display: "flex", justifyContent: "space-between", background: "#eaf3ea" }}>
+      <div style={{ ...card, padding: "12px 16px", display: "flex", justifyContent: "space-between", background: "#eef1f7" }}>
         <span style={{ fontWeight: 600 }}>Total shown</span>
         <span style={{ fontWeight: 800, color: "#c0392b" }}>{fmt(total)}</span>
       </div>
@@ -358,7 +361,7 @@ function Expenses({ expenses, setExpenses }) {
           <div key={e.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{e.category} <span style={{ fontWeight: 800, color: "#c0392b", marginLeft: 6 }}>{fmt(e.amount)}</span></div>
-              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 2 }}>{e.date}{e.note ? ` · ${e.note}` : ""}</div>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{e.date}{e.note ? ` · ${e.note}` : ""}</div>
             </div>
             <button onClick={() => remove(e.id)} style={delBtn}><Trash2 size={18} /></button>
           </div>
@@ -422,11 +425,11 @@ function Medicines({ medicines, setMedicines, animals }) {
           const low = Number(m.quantity) <= Number(m.low_threshold || 0);
           const exp = m.expiry ? daysUntil(m.expiry) : null;
           return (
-            <div key={m.id} style={{ ...card, padding: 14, marginBottom: 10, borderLeft: low ? "4px solid #e0a800" : "4px solid #5a8c6a" }}>
+            <div key={m.id} style={{ ...card, padding: 14, marginBottom: 10, borderLeft: low ? "4px solid #e0a800" : "4px solid #c79a2e" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{m.name}</div>
-                  <div style={{ fontSize: 12, color: "#8aa092", marginTop: 3 }}>
+                  <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 3 }}>
                     {m.expiry ? `Expires ${m.expiry}${exp <= 30 && exp >= 0 ? ` · ${exp}d left` : exp < 0 ? " · EXPIRED" : ""}` : "No expiry set"}
                     {m.note ? ` · ${m.note}` : ""}
                   </div>
@@ -435,7 +438,7 @@ function Medicines({ medicines, setMedicines, animals }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
                 <button onClick={() => adjust(m.id, -1)} style={stepBtn}>−</button>
-                <span style={{ fontWeight: 800, fontSize: 17, minWidth: 70, textAlign: "center" }}>{m.quantity} <span style={{ fontSize: 13, fontWeight: 500, color: "#8aa092" }}>{m.unit}</span></span>
+                <span style={{ fontWeight: 800, fontSize: 17, minWidth: 70, textAlign: "center" }}>{m.quantity} <span style={{ fontSize: 13, fontWeight: 500, color: "#8a93a8" }}>{m.unit}</span></span>
                 <button onClick={() => adjust(m.id, 1)} style={stepBtn}>+</button>
                 {low && <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#9a6700", background: "#fff3d6", padding: "3px 8px", borderRadius: 6 }}>Low stock</span>}
               </div>
@@ -505,7 +508,7 @@ function Vaccinations({ vaccinations, setVaccinations, animals }) {
           <div key={v.id} style={{ ...card, padding: 14, marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{v.animal} · {v.vaccine}</div>
-              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 3 }}>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 3 }}>
                 Given {v.date}{v.given_by ? ` by ${v.given_by}` : ""}{v.next_due ? ` · next due ${v.next_due}` : ""}{v.note ? ` · ${v.note}` : ""}
               </div>
             </div>
@@ -568,15 +571,15 @@ function MilkProduction({ milk, setMilk, animals }) {
 
       <div style={card}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-          <div><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>7-day total</div><div style={{ fontSize: 22, fontWeight: 800, color: "#2f5e3a" }}>{fmt(weekTotal)} L</div></div>
-          <div style={{ textAlign: "right" }}><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Daily average</div><div style={{ fontSize: 22, fontWeight: 800, color: "#2f5e3a" }}>{fmt(avg)} L</div></div>
+          <div><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>7-day total</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{fmt(weekTotal)} L</div></div>
+          <div style={{ textAlign: "right" }}><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Daily average</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{fmt(avg)} L</div></div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
           {last7.map((d) => (
             <div key={d.ds} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ fontSize: 10, color: "#8aa092" }}>{d.total ? fmt(d.total) : ""}</div>
-              <div style={{ width: "100%", background: "#e8f0e8", borderRadius: "6px 6px 0 0", display: "flex", alignItems: "flex-end", height: 80 }}>
-                <div style={{ width: "100%", height: `${(d.total / maxDay) * 100}%`, background: "#5a8c6a", borderRadius: "6px 6px 0 0", minHeight: d.total ? 4 : 0 }} />
+              <div style={{ fontSize: 10, color: "#8a93a8" }}>{d.total ? fmt(d.total) : ""}</div>
+              <div style={{ width: "100%", background: "#eef1f7", borderRadius: "6px 6px 0 0", display: "flex", alignItems: "flex-end", height: 80 }}>
+                <div style={{ width: "100%", height: `${(d.total / maxDay) * 100}%`, background: "#c79a2e", borderRadius: "6px 6px 0 0", minHeight: d.total ? 4 : 0 }} />
               </div>
               <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>{d.label}</div>
             </div>
@@ -588,8 +591,8 @@ function MilkProduction({ milk, setMilk, animals }) {
         milk.slice(0, 60).map((m) => (
           <div key={m.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{fmt(m.litres)} L <span style={{ fontWeight: 500, fontSize: 13, color: "#8aa092" }}>· {m.session}</span></div>
-              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 2 }}>{m.date}{m.animal ? ` · ${m.animal}` : ""}{m.note ? ` · ${m.note}` : ""}</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{fmt(m.litres)} L <span style={{ fontWeight: 500, fontSize: 13, color: "#8a93a8" }}>· {m.session}</span></div>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{m.date}{m.animal ? ` · ${m.animal}` : ""}{m.note ? ` · ${m.note}` : ""}</div>
             </div>
             <button onClick={() => remove(m.id)} style={delBtn}><Trash2 size={18} /></button>
           </div>
@@ -662,7 +665,7 @@ function Construction({ construction, setConstruction }) {
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
         {["All", ...CONSTRUCTION_CATEGORIES].map((c) => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
-            whiteSpace: "nowrap", border: "1px solid #cdddcd", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+            whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterCat === c ? "#1c5fa8" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
           }}>{c}</button>
         ))}
@@ -680,7 +683,7 @@ function Construction({ construction, setConstruction }) {
           <div key={c.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{c.item} <span style={{ fontWeight: 800, color: "#1c5fa8", marginLeft: 6 }}>{fmt(c.amount)}</span></div>
-              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 2 }}>{c.date} · {c.category}{c.vendor ? ` · ${c.vendor}` : ""}{c.note ? ` · ${c.note}` : ""}</div>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{c.date} · {c.category}{c.vendor ? ` · ${c.vendor}` : ""}{c.note ? ` · ${c.note}` : ""}</div>
             </div>
             <button onClick={() => remove(c.id)} style={delBtn}><Trash2 size={18} /></button>
           </div>
@@ -763,7 +766,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
     const totalMilk = myMilk.reduce((s, m) => s + Number(m.litres), 0);
     return (
       <div>
-        <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#2f5e3a", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← All animals</button>
+        <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#1e3a5f", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← All animals</button>
         <div style={{ ...card }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
@@ -772,7 +775,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
                 {a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)} old` : ""}
               </div>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#2f5e3a", background: "#e8f0e8", padding: "4px 10px", borderRadius: 8 }}>{a.status || "Active"}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#1e3a5f", background: "#eef1f7", padding: "4px 10px", borderRadius: 8 }}>{a.status || "Active"}</span>
           </div>
           {a.note && <div style={{ fontSize: 13, color: "#5a6e60", marginTop: 10 }}>{a.note}</div>}
         </div>
@@ -780,24 +783,24 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
         <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
           <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Total milk</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#2f5e3a" }}>{fmt(totalMilk)} L</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{fmt(totalMilk)} L</div>
           </div>
           <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Vaccinations</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#2f5e3a" }}>{myVax.length}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{myVax.length}</div>
           </div>
         </div>
 
         <div style={{ ...card }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Vaccination history</div>
-          {myVax.length === 0 ? <div style={{ color: "#8aa092", fontSize: 13 }}>None recorded for this animal.</div> :
-            myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef3ee" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next ${v.next_due}` : ""}</div>)}
+          {myVax.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
+            myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next ${v.next_due}` : ""}</div>)}
         </div>
 
         <div style={{ ...card }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Recent milk</div>
-          {myMilk.length === 0 ? <div style={{ color: "#8aa092", fontSize: 13 }}>None recorded for this animal.</div> :
-            myMilk.slice(0, 10).map((m) => <div key={m.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef3ee" }}>{m.date} · {m.session} · {fmt(m.litres)} L</div>)}
+          {myMilk.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
+            myMilk.slice(0, 10).map((m) => <div key={m.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{m.date} · {m.session} · {fmt(m.litres)} L</div>)}
         </div>
 
         <button onClick={() => remove(a.id)} style={{ ...delBtn, width: "100%", padding: "12px", display: "flex", justifyContent: "center", gap: 8, alignItems: "center", marginTop: 6 }}>
@@ -818,8 +821,8 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
         {["All", ...ANIMAL_TYPES].map((c) => (
           <button key={c} onClick={() => setFilterType(c)} style={{
-            whiteSpace: "nowrap", border: "1px solid #cdddcd", borderRadius: 20, padding: "6px 12px", fontSize: 13,
-            background: filterType === c ? "#2f5e3a" : "white", color: filterType === c ? "white" : "#3a4a3f", cursor: "pointer",
+            whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+            background: filterType === c ? "#1e3a5f" : "white", color: filterType === c ? "white" : "#3a4a3f", cursor: "pointer",
           }}>{c}</button>
         ))}
       </div>
@@ -829,11 +832,11 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
           <div key={a.id} onClick={() => setSelected(a)} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{a.tag}</div>
-              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>
                 {a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)}` : ""}
               </div>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#2f5e3a", background: "#e8f0e8", padding: "3px 9px", borderRadius: 7 }}>{a.status || "Active"}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#1e3a5f", background: "#eef1f7", padding: "3px 9px", borderRadius: 7 }}>{a.status || "Active"}</span>
           </div>
         ))}
 
@@ -861,4 +864,4 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
 }
 
 const delBtn = { border: "none", background: "#fbeaea", color: "#c0392b", borderRadius: 8, padding: 8, cursor: "pointer", flexShrink: 0 };
-const stepBtn = { border: "1px solid #cdddcd", background: "white", width: 38, height: 38, borderRadius: 10, fontSize: 22, fontWeight: 700, color: "#2f5e3a", cursor: "pointer", lineHeight: 1 };
+const stepBtn = { border: "1px solid #cdd6e6", background: "white", width: 38, height: 38, borderRadius: 10, fontSize: 22, fontWeight: 700, color: "#1e3a5f", cursor: "pointer", lineHeight: 1 };
