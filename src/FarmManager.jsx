@@ -1,44 +1,20 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
-  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer
+  TrendingUp, Calendar, AlertTriangle, X, Download, Home
 } from "lucide-react";
-import { supabase } from "./supabaseClient";
 
-// ---------- Supabase data layer ----------
-// Each record type is a table. Rows are shared across everyone who logs in.
-const fetchTable = async (table) => {
-  const { data, error } = await supabase.from(table).select("*").order("id", { ascending: false });
-  if (error) { console.error(error); return []; }
-  return data || [];
+// ---------- storage helpers ----------
+const load = async (key, fallback) => {
+  try {
+    const r = await window.storage.get(key);
+    return r ? JSON.parse(r.value) : fallback;
+  } catch {
+    return fallback;
+  }
 };
-const insertRow = async (table, row) => {
-  const { data, error } = await supabase.from(table).insert(row).select().single();
-  if (error) { console.error(error); alert("Could not save. Check your connection and try again."); return null; }
-  return data;
-};
-const deleteRow = async (table, id) => {
-  const { error } = await supabase.from(table).delete().eq("id", id);
-  if (error) { console.error(error); alert("Could not delete. Try again."); return false; }
-  return true;
-};
-const updateRow = async (table, id, patch) => {
-  const { error } = await supabase.from(table).update(patch).eq("id", id);
-  if (error) { console.error(error); return false; }
-  return true;
-};
-
-// ---------- CSV export ----------
-const exportCSV = (filename, rows) => {
-  if (!rows.length) { alert("Nothing to export yet."); return; }
-  const headers = Object.keys(rows[0]).filter((k) => k !== "id");
-  const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+const save = async (key, value) => {
+  try { await window.storage.set(key, JSON.stringify(value)); } catch (e) { console.error(e); }
 };
 
 const EXPENSE_CATEGORIES = ["Feed", "Medicine", "Labour", "Equipment", "Utilities", "Veterinary", "Maintenance", "Transport", "Other"];
@@ -46,68 +22,6 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 export default function FarmManager() {
-  const [session, setSession] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  if (!authReady) {
-    return <CenterMsg>Starting up…</CenterMsg>;
-  }
-  if (!session) {
-    return <Login />;
-  }
-  return <FarmApp onSignOut={() => supabase.auth.signOut()} />;
-}
-
-function CenterMsg({ children }) {
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f7f0", color: "#2f5e3a", fontFamily: "system-ui" }}>
-      {children}
-    </div>
-  );
-}
-
-function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const signIn = async () => {
-    setBusy(true); setErr("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setErr(error.message);
-    setBusy(false);
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#f0f7f0", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
-        <div style={{ fontSize: 30, textAlign: "center", marginBottom: 6 }}>🐄</div>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "#1f2d24" }}>Farm Manager</h1>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#7a8c7f", textAlign: "center" }}>Sign in to access your farm records</p>
-        <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Email</label>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoCapitalize="none" placeholder="you@example.com"
-          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdddcd", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "#fbfdfb" }} />
-        <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Password</label>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••"
-          onKeyDown={(e) => e.key === "Enter" && signIn()}
-          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdddcd", fontSize: 15, boxSizing: "border-box", marginBottom: 16, background: "#fbfdfb" }} />
-        {err && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 12 }}>{err}</div>}
-        <button onClick={signIn} disabled={busy} style={{ width: "100%", background: "#2f5e3a", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function FarmApp({ onSignOut }) {
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
 
@@ -115,24 +29,21 @@ function FarmApp({ onSignOut }) {
   const [medicines, setMedicines] = useState([]);
   const [vaccinations, setVaccinations] = useState([]);
   const [milk, setMilk] = useState([]);
-  const [construction, setConstruction] = useState([]);
 
-  const reload = async () => {
-    setLoading(true);
-    const [e, m, v, mk, c] = await Promise.all([
-      fetchTable("expenses"), fetchTable("medicines"),
-      fetchTable("vaccinations"), fetchTable("milk"),
-      fetchTable("construction"),
-    ]);
-    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c);
-    setLoading(false);
-  };
+  useEffect(() => {
+    (async () => {
+      setExpenses(await load("expenses", []));
+      setMedicines(await load("medicines", []));
+      setVaccinations(await load("vaccinations", []));
+      setMilk(await load("milk", []));
+      setLoading(false);
+    })();
+  }, []);
 
-  useEffect(() => { reload(); }, []);
-
-  if (loading) {
-    return <CenterMsg>Loading your farm records…</CenterMsg>;
-  }
+  useEffect(() => { if (!loading) save("expenses", expenses); }, [expenses, loading]);
+  useEffect(() => { if (!loading) save("medicines", medicines); }, [medicines, loading]);
+  useEffect(() => { if (!loading) save("vaccinations", vaccinations); }, [vaccinations, loading]);
+  useEffect(() => { if (!loading) save("milk", milk); }, [milk, loading]);
 
   const tabs = [
     { id: "dashboard", label: "Home", icon: Home },
@@ -140,19 +51,22 @@ function FarmApp({ onSignOut }) {
     { id: "medicines", label: "Medicines", icon: Pill },
     { id: "vaccinations", label: "Vaccines", icon: Syringe },
     { id: "milk", label: "Milk", icon: Milk },
-    { id: "construction", label: "Build", icon: Hammer },
   ];
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f7f0", color: "#2f5e3a", fontFamily: "system-ui" }}>
+        Loading your farm records…
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f0f7f0", fontFamily: "system-ui, -apple-system, sans-serif", color: "#1f2d24", paddingBottom: 76 }}>
-      <header style={{ background: "#2f5e3a", color: "white", padding: "16px 18px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <header style={{ background: "#2f5e3a", color: "white", padding: "16px 18px", position: "sticky", top: 0, zIndex: 10 }}>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
           🐄 Farm Manager
         </h1>
-        <div style={{ display: "flex", gap: 14 }}>
-          <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><RefreshCw size={19} /></button>
-          <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><LogOut size={19} /></button>
-        </div>
       </header>
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
@@ -161,7 +75,6 @@ function FarmApp({ onSignOut }) {
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations }} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk }} />}
-        {tab === "construction" && <Construction {...{ construction, setConstruction }} />}
       </main>
 
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d6e3d6", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
@@ -194,14 +107,11 @@ function Field({ label, children }) {
   return <div style={{ marginBottom: 12 }}><label style={labelStyle}>{label}</label>{children}</div>;
 }
 
-function SectionHeader({ title, onAdd, addLabel = "Add", onExport }) {
+function SectionHeader({ title, onAdd, addLabel = "Add" }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
       <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{title}</h2>
-      <div style={{ display: "flex", gap: 8 }}>
-        {onExport && <button onClick={onExport} title="Export CSV" style={{ ...primaryBtn, background: "white", color: "#2f5e3a", border: "1px solid #cdddcd", padding: "12px" }}><Download size={18} /></button>}
-        {onAdd && <button onClick={onAdd} style={primaryBtn}><Plus size={18} />{addLabel}</button>}
-      </div>
+      {onAdd && <button onClick={onAdd} style={primaryBtn}><Plus size={18} />{addLabel}</button>}
     </div>
   );
 }
@@ -235,7 +145,7 @@ function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
   const monthExpense = expenses.filter((e) => e.date.startsWith(thisMonth)).reduce((s, e) => s + Number(e.amount), 0);
   const totalExpense = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const todayMilk = milk.filter((m) => m.date === todayStr()).reduce((s, m) => s + Number(m.litres), 0);
-  const lowStock = medicines.filter((m) => Number(m.quantity) <= Number(m.low_threshold || 0));
+  const lowStock = medicines.filter((m) => Number(m.quantity) <= Number(m.lowThreshold || 0));
   const expExpiring = medicines.filter((m) => m.expiry && daysUntil(m.expiry) <= 30 && daysUntil(m.expiry) >= 0);
 
   const byCat = useMemo(() => {
@@ -310,17 +220,13 @@ function Expenses({ expenses, setExpenses }) {
   const [filterCat, setFilterCat] = useState("All");
   const [form, setForm] = useState({ date: todayStr(), category: "Feed", amount: "", note: "" });
 
-  const add = async () => {
+  const add = () => {
     if (!form.amount) return;
-    const row = { date: form.date, category: form.category, amount: Number(form.amount), note: form.note };
-    const saved = await insertRow("expenses", row);
-    if (saved) setExpenses([saved, ...expenses]);
+    setExpenses([{ ...form, id: Date.now(), amount: Number(form.amount) }, ...expenses]);
     setForm({ date: todayStr(), category: "Feed", amount: "", note: "" });
     setShowForm(false);
   };
-  const remove = async (id) => {
-    if (await deleteRow("expenses", id)) setExpenses(expenses.filter((e) => e.id !== id));
-  };
+  const remove = (id) => setExpenses(expenses.filter((e) => e.id !== id));
 
   const filtered = expenses.filter((e) =>
     (filterCat === "All" || e.category === filterCat) &&
@@ -330,7 +236,7 @@ function Expenses({ expenses, setExpenses }) {
 
   return (
     <div>
-      <SectionHeader title="Expenses" onAdd={() => setShowForm(true)} onExport={() => exportCSV("expenses.csv", expenses)} />
+      <SectionHeader title="Expenses" onAdd={() => setShowForm(true)} />
       <div style={{ position: "relative", marginBottom: 10 }}>
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes or category" style={{ ...inputStyle, paddingLeft: 36 }} />
@@ -381,33 +287,21 @@ function Expenses({ expenses, setExpenses }) {
 function Medicines({ medicines, setMedicines }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
-  const blank = { name: "", quantity: "", unit: "units", low_threshold: "", expiry: "", note: "" };
+  const blank = { name: "", quantity: "", unit: "units", lowThreshold: "", expiry: "", note: "" };
   const [form, setForm] = useState(blank);
 
-  const add = async () => {
+  const add = () => {
     if (!form.name) return;
-    const row = {
-      name: form.name, quantity: Number(form.quantity || 0), unit: form.unit,
-      low_threshold: Number(form.low_threshold || 0), expiry: form.expiry || null, note: form.note,
-    };
-    const saved = await insertRow("medicines", row);
-    if (saved) setMedicines([saved, ...medicines]);
+    setMedicines([{ ...form, id: Date.now(), quantity: Number(form.quantity || 0) }, ...medicines]);
     setForm(blank); setShowForm(false);
   };
-  const adjust = async (id, delta) => {
-    const m = medicines.find((x) => x.id === id);
-    const next = Math.max(0, Number(m.quantity) + delta);
-    setMedicines(medicines.map((x) => x.id === id ? { ...x, quantity: next } : x));
-    await updateRow("medicines", id, { quantity: next });
-  };
-  const remove = async (id) => {
-    if (await deleteRow("medicines", id)) setMedicines(medicines.filter((m) => m.id !== id));
-  };
+  const adjust = (id, delta) => setMedicines(medicines.map((m) => m.id === id ? { ...m, quantity: Math.max(0, Number(m.quantity) + delta) } : m));
+  const remove = (id) => setMedicines(medicines.filter((m) => m.id !== id));
   const filtered = medicines.filter((m) => m.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <div>
-      <SectionHeader title="Medicines at farm" onAdd={() => setShowForm(true)} onExport={() => exportCSV("medicines.csv", medicines)} />
+      <SectionHeader title="Medicines at farm" onAdd={() => setShowForm(true)} />
       <div style={{ position: "relative", marginBottom: 12 }}>
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medicine" style={{ ...inputStyle, paddingLeft: 36 }} />
@@ -415,7 +309,7 @@ function Medicines({ medicines, setMedicines }) {
 
       {filtered.length === 0 ? <Empty icon={Pill} text="No medicines in stock. Tap Add to record one." /> :
         filtered.map((m) => {
-          const low = Number(m.quantity) <= Number(m.low_threshold || 0);
+          const low = Number(m.quantity) <= Number(m.lowThreshold || 0);
           const exp = m.expiry ? daysUntil(m.expiry) : null;
           return (
             <div key={m.id} style={{ ...card, padding: 14, marginBottom: 10, borderLeft: low ? "4px solid #e0a800" : "4px solid #5a8c6a" }}>
@@ -446,7 +340,7 @@ function Medicines({ medicines, setMedicines }) {
             <div style={{ flex: 1 }}><Field label="Quantity"><input type="number" inputMode="decimal" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="0" style={inputStyle} /></Field></div>
             <div style={{ flex: 1 }}><Field label="Unit"><input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="bottles / ml / units" style={inputStyle} /></Field></div>
           </div>
-          <Field label="Low-stock alert below"><input type="number" inputMode="decimal" value={form.low_threshold} onChange={(e) => setForm({ ...form, low_threshold: e.target.value })} placeholder="e.g. 2" style={inputStyle} /></Field>
+          <Field label="Low-stock alert below"><input type="number" inputMode="decimal" value={form.lowThreshold} onChange={(e) => setForm({ ...form, lowThreshold: e.target.value })} placeholder="e.g. 2" style={inputStyle} /></Field>
           <Field label="Expiry date (optional)"><input type="date" value={form.expiry} onChange={(e) => setForm({ ...form, expiry: e.target.value })} style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. for mastitis" style={inputStyle} /></Field>
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save medicine</button>
@@ -460,35 +354,28 @@ function Medicines({ medicines, setMedicines }) {
 function Vaccinations({ vaccinations, setVaccinations }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
-  const blank = { animal: "", vaccine: "", date: todayStr(), next_due: "", given_by: "", note: "" };
+  const blank = { animal: "", vaccine: "", date: todayStr(), nextDue: "", givenBy: "", note: "" };
   const [form, setForm] = useState(blank);
 
-  const add = async () => {
+  const add = () => {
     if (!form.animal || !form.vaccine) return;
-    const row = {
-      animal: form.animal, vaccine: form.vaccine, date: form.date,
-      next_due: form.next_due || null, given_by: form.given_by, note: form.note,
-    };
-    const saved = await insertRow("vaccinations", row);
-    if (saved) setVaccinations([saved, ...vaccinations]);
+    setVaccinations([{ ...form, id: Date.now() }, ...vaccinations]);
     setForm(blank); setShowForm(false);
   };
-  const remove = async (id) => {
-    if (await deleteRow("vaccinations", id)) setVaccinations(vaccinations.filter((v) => v.id !== id));
-  };
+  const remove = (id) => setVaccinations(vaccinations.filter((v) => v.id !== id));
   const filtered = vaccinations.filter((v) =>
     v.animal.toLowerCase().includes(query.toLowerCase()) || v.vaccine.toLowerCase().includes(query.toLowerCase()));
 
-  const upcoming = vaccinations.filter((v) => v.next_due && daysUntil(v.next_due) >= 0 && daysUntil(v.next_due) <= 14)
-    .sort((a, b) => new Date(a.next_due) - new Date(b.next_due));
+  const upcoming = vaccinations.filter((v) => v.nextDue && daysUntil(v.nextDue) >= 0 && daysUntil(v.nextDue) <= 14)
+    .sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue));
 
   return (
     <div>
-      <SectionHeader title="Vaccination record" onAdd={() => setShowForm(true)} onExport={() => exportCSV("vaccinations.csv", vaccinations)} />
+      <SectionHeader title="Vaccination record" onAdd={() => setShowForm(true)} />
       {upcoming.length > 0 && (
         <div style={{ ...card, background: "#eef6ff", border: "1px solid #bcdcff" }}>
           <div style={{ fontWeight: 700, color: "#1c5fa8", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}><Calendar size={17} /> Due soon</div>
-          {upcoming.map((v) => <div key={v.id} style={{ fontSize: 13, color: "#2a5a8a" }}>• {v.animal} — {v.vaccine} in {daysUntil(v.next_due)}d ({v.next_due})</div>)}
+          {upcoming.map((v) => <div key={v.id} style={{ fontSize: 13, color: "#2a5a8a" }}>• {v.animal} — {v.vaccine} in {daysUntil(v.nextDue)}d ({v.nextDue})</div>)}
         </div>
       )}
       <div style={{ position: "relative", marginBottom: 12 }}>
@@ -502,7 +389,7 @@ function Vaccinations({ vaccinations, setVaccinations }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{v.animal} · {v.vaccine}</div>
               <div style={{ fontSize: 12, color: "#8aa092", marginTop: 3 }}>
-                Given {v.date}{v.given_by ? ` by ${v.given_by}` : ""}{v.next_due ? ` · next due ${v.next_due}` : ""}{v.note ? ` · ${v.note}` : ""}
+                Given {v.date}{v.givenBy ? ` by ${v.givenBy}` : ""}{v.nextDue ? ` · next due ${v.nextDue}` : ""}{v.note ? ` · ${v.note}` : ""}
               </div>
             </div>
             <button onClick={() => remove(v.id)} style={delBtn}><Trash2 size={18} /></button>
@@ -515,9 +402,9 @@ function Vaccinations({ vaccinations, setVaccinations }) {
           <Field label="Vaccine"><input value={form.vaccine} onChange={(e) => setForm({ ...form, vaccine: e.target.value })} placeholder="e.g. FMD, HS, Brucella" style={inputStyle} /></Field>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}><Field label="Date given"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field></div>
-            <div style={{ flex: 1 }}><Field label="Next due"><input type="date" value={form.next_due} onChange={(e) => setForm({ ...form, next_due: e.target.value })} style={inputStyle} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Next due"><input type="date" value={form.nextDue} onChange={(e) => setForm({ ...form, nextDue: e.target.value })} style={inputStyle} /></Field></div>
           </div>
-          <Field label="Given by (optional)"><input value={form.given_by} onChange={(e) => setForm({ ...form, given_by: e.target.value })} placeholder="e.g. Dr. Khan" style={inputStyle} /></Field>
+          <Field label="Given by (optional)"><input value={form.givenBy} onChange={(e) => setForm({ ...form, givenBy: e.target.value })} placeholder="e.g. Dr. Khan" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save record</button>
         </Modal>
@@ -532,17 +419,13 @@ function MilkProduction({ milk, setMilk }) {
   const blank = { date: todayStr(), session: "Morning", litres: "", animal: "", note: "" };
   const [form, setForm] = useState(blank);
 
-  const add = async () => {
+  const add = () => {
     if (!form.litres) return;
-    const row = { date: form.date, session: form.session, litres: Number(form.litres), animal: form.animal, note: form.note };
-    const saved = await insertRow("milk", row);
-    if (saved) setMilk([saved, ...milk]);
+    setMilk([{ ...form, id: Date.now(), litres: Number(form.litres) }, ...milk]);
     setForm({ ...blank, date: form.date });
     setShowForm(false);
   };
-  const remove = async (id) => {
-    if (await deleteRow("milk", id)) setMilk(milk.filter((m) => m.id !== id));
-  };
+  const remove = (id) => setMilk(milk.filter((m) => m.id !== id));
 
   const last7 = useMemo(() => {
     const days = [];
@@ -560,7 +443,7 @@ function MilkProduction({ milk, setMilk }) {
 
   return (
     <div>
-      <SectionHeader title="Milk production" onAdd={() => setShowForm(true)} addLabel="Log" onExport={() => exportCSV("milk.csv", milk)} />
+      <SectionHeader title="Milk production" onAdd={() => setShowForm(true)} addLabel="Log" />
 
       <div style={card}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
@@ -605,96 +488,6 @@ function MilkProduction({ milk, setMilk }) {
           <Field label="Animal (optional)"><input value={form.animal} onChange={(e) => setForm({ ...form, animal: e.target.value })} placeholder="e.g. Cow #12 or total" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save</button>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ---------- construction ----------
-const CONSTRUCTION_CATEGORIES = ["Materials", "Labour", "Contractor", "Permits", "Equipment", "Other"];
-
-function Construction({ construction, setConstruction }) {
-  const [showForm, setShowForm] = useState(false);
-  const [query, setQuery] = useState("");
-  const [filterCat, setFilterCat] = useState("All");
-  const blank = { date: todayStr(), item: "", category: "Materials", amount: "", vendor: "", note: "" };
-  const [form, setForm] = useState(blank);
-
-  const add = async () => {
-    if (!form.item || !form.amount) return;
-    const row = { date: form.date, item: form.item, category: form.category, amount: Number(form.amount), vendor: form.vendor, note: form.note };
-    const saved = await insertRow("construction", row);
-    if (saved) setConstruction([saved, ...construction]);
-    setForm(blank); setShowForm(false);
-  };
-  const remove = async (id) => {
-    if (await deleteRow("construction", id)) setConstruction(construction.filter((c) => c.id !== id));
-  };
-
-  const filtered = construction.filter((c) =>
-    (filterCat === "All" || c.category === filterCat) &&
-    ((c.item || "").toLowerCase().includes(query.toLowerCase()) ||
-     (c.vendor || "").toLowerCase().includes(query.toLowerCase()) ||
-     (c.note || "").toLowerCase().includes(query.toLowerCase()))
-  );
-  const grandTotal = construction.reduce((s, c) => s + Number(c.amount), 0);
-  const shownTotal = filtered.reduce((s, c) => s + Number(c.amount), 0);
-
-  return (
-    <div>
-      <SectionHeader title="Construction costs" onAdd={() => setShowForm(true)} onExport={() => exportCSV("construction.csv", construction)} />
-
-      <div style={{ ...card, padding: 16, background: "#eef3f7", border: "1px solid #cdddea" }}>
-        <div style={{ fontSize: 12, color: "#5a6e82", fontWeight: 600 }}>Total project cost so far</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: "#1c5fa8", marginTop: 4 }}>{fmt(grandTotal)}</div>
-        <div style={{ fontSize: 11, color: "#7a8ca0", marginTop: 2 }}>{construction.length} entries · separate from farm expenses</div>
-      </div>
-
-      <div style={{ position: "relative", marginBottom: 10 }}>
-        <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search item, vendor or note" style={{ ...inputStyle, paddingLeft: 36 }} />
-      </div>
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
-        {["All", ...CONSTRUCTION_CATEGORIES].map((c) => (
-          <button key={c} onClick={() => setFilterCat(c)} style={{
-            whiteSpace: "nowrap", border: "1px solid #cdddcd", borderRadius: 20, padding: "6px 12px", fontSize: 13,
-            background: filterCat === c ? "#1c5fa8" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
-          }}>{c}</button>
-        ))}
-      </div>
-
-      {filterCat !== "All" && (
-        <div style={{ ...card, padding: "10px 16px", display: "flex", justifyContent: "space-between", background: "#eaf0f6" }}>
-          <span style={{ fontWeight: 600 }}>{filterCat} total</span>
-          <span style={{ fontWeight: 800, color: "#1c5fa8" }}>{fmt(shownTotal)}</span>
-        </div>
-      )}
-
-      {filtered.length === 0 ? <Empty icon={Hammer} text="No construction costs yet. Tap Add to record one." /> :
-        filtered.map((c) => (
-          <div key={c.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{c.item} <span style={{ fontWeight: 800, color: "#1c5fa8", marginLeft: 6 }}>{fmt(c.amount)}</span></div>
-              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 2 }}>{c.date} · {c.category}{c.vendor ? ` · ${c.vendor}` : ""}{c.note ? ` · ${c.note}` : ""}</div>
-            </div>
-            <button onClick={() => remove(c.id)} style={delBtn}><Trash2 size={18} /></button>
-          </div>
-        ))}
-
-      {showForm && (
-        <Modal title="Add construction cost" onClose={() => setShowForm(false)}>
-          <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
-          <Field label="Item / description"><input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement 20 bags" style={inputStyle} /></Field>
-          <Field label="Category">
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-              {CONSTRUCTION_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
-          <Field label="Vendor / supplier (optional)"><input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="e.g. Khan Hardware" style={inputStyle} /></Field>
-          <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, background: "#1c5fa8" }}>Save cost</button>
         </Modal>
       )}
     </div>
