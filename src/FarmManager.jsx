@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
-  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw
+  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -115,14 +115,16 @@ function FarmApp({ onSignOut }) {
   const [medicines, setMedicines] = useState([]);
   const [vaccinations, setVaccinations] = useState([]);
   const [milk, setMilk] = useState([]);
+  const [construction, setConstruction] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk] = await Promise.all([
+    const [e, m, v, mk, c] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
+      fetchTable("construction"),
     ]);
-    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk);
+    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c);
     setLoading(false);
   };
 
@@ -138,6 +140,7 @@ function FarmApp({ onSignOut }) {
     { id: "medicines", label: "Medicines", icon: Pill },
     { id: "vaccinations", label: "Vaccines", icon: Syringe },
     { id: "milk", label: "Milk", icon: Milk },
+    { id: "construction", label: "Build", icon: Hammer },
   ];
 
   return (
@@ -158,6 +161,7 @@ function FarmApp({ onSignOut }) {
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations }} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk }} />}
+        {tab === "construction" && <Construction {...{ construction, setConstruction }} />}
       </main>
 
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d6e3d6", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
@@ -601,6 +605,96 @@ function MilkProduction({ milk, setMilk }) {
           <Field label="Animal (optional)"><input value={form.animal} onChange={(e) => setForm({ ...form, animal: e.target.value })} placeholder="e.g. Cow #12 or total" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save</button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ---------- construction ----------
+const CONSTRUCTION_CATEGORIES = ["Materials", "Labour", "Contractor", "Permits", "Equipment", "Other"];
+
+function Construction({ construction, setConstruction }) {
+  const [showForm, setShowForm] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filterCat, setFilterCat] = useState("All");
+  const blank = { date: todayStr(), item: "", category: "Materials", amount: "", vendor: "", note: "" };
+  const [form, setForm] = useState(blank);
+
+  const add = async () => {
+    if (!form.item || !form.amount) return;
+    const row = { date: form.date, item: form.item, category: form.category, amount: Number(form.amount), vendor: form.vendor, note: form.note };
+    const saved = await insertRow("construction", row);
+    if (saved) setConstruction([saved, ...construction]);
+    setForm(blank); setShowForm(false);
+  };
+  const remove = async (id) => {
+    if (await deleteRow("construction", id)) setConstruction(construction.filter((c) => c.id !== id));
+  };
+
+  const filtered = construction.filter((c) =>
+    (filterCat === "All" || c.category === filterCat) &&
+    ((c.item || "").toLowerCase().includes(query.toLowerCase()) ||
+     (c.vendor || "").toLowerCase().includes(query.toLowerCase()) ||
+     (c.note || "").toLowerCase().includes(query.toLowerCase()))
+  );
+  const grandTotal = construction.reduce((s, c) => s + Number(c.amount), 0);
+  const shownTotal = filtered.reduce((s, c) => s + Number(c.amount), 0);
+
+  return (
+    <div>
+      <SectionHeader title="Construction costs" onAdd={() => setShowForm(true)} onExport={() => exportCSV("construction.csv", construction)} />
+
+      <div style={{ ...card, padding: 16, background: "#eef3f7", border: "1px solid #cdddea" }}>
+        <div style={{ fontSize: 12, color: "#5a6e82", fontWeight: 600 }}>Total project cost so far</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "#1c5fa8", marginTop: 4 }}>{fmt(grandTotal)}</div>
+        <div style={{ fontSize: 11, color: "#7a8ca0", marginTop: 2 }}>{construction.length} entries · separate from farm expenses</div>
+      </div>
+
+      <div style={{ position: "relative", marginBottom: 10 }}>
+        <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search item, vendor or note" style={{ ...inputStyle, paddingLeft: 36 }} />
+      </div>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
+        {["All", ...CONSTRUCTION_CATEGORIES].map((c) => (
+          <button key={c} onClick={() => setFilterCat(c)} style={{
+            whiteSpace: "nowrap", border: "1px solid #cdddcd", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+            background: filterCat === c ? "#1c5fa8" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
+          }}>{c}</button>
+        ))}
+      </div>
+
+      {filterCat !== "All" && (
+        <div style={{ ...card, padding: "10px 16px", display: "flex", justifyContent: "space-between", background: "#eaf0f6" }}>
+          <span style={{ fontWeight: 600 }}>{filterCat} total</span>
+          <span style={{ fontWeight: 800, color: "#1c5fa8" }}>{fmt(shownTotal)}</span>
+        </div>
+      )}
+
+      {filtered.length === 0 ? <Empty icon={Hammer} text="No construction costs yet. Tap Add to record one." /> :
+        filtered.map((c) => (
+          <div key={c.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{c.item} <span style={{ fontWeight: 800, color: "#1c5fa8", marginLeft: 6 }}>{fmt(c.amount)}</span></div>
+              <div style={{ fontSize: 12, color: "#8aa092", marginTop: 2 }}>{c.date} · {c.category}{c.vendor ? ` · ${c.vendor}` : ""}{c.note ? ` · ${c.note}` : ""}</div>
+            </div>
+            <button onClick={() => remove(c.id)} style={delBtn}><Trash2 size={18} /></button>
+          </div>
+        ))}
+
+      {showForm && (
+        <Modal title="Add construction cost" onClose={() => setShowForm(false)}>
+          <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Item / description"><input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement 20 bags" style={inputStyle} /></Field>
+          <Field label="Category">
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+              {CONSTRUCTION_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+          <Field label="Vendor / supplier (optional)"><input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="e.g. Khan Hardware" style={inputStyle} /></Field>
+          <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
+          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, background: "#1c5fa8" }}>Save cost</button>
         </Modal>
       )}
     </div>
