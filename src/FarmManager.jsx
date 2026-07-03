@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
-  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint
+  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint, Settings as SettingsIcon
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -119,19 +119,33 @@ function FarmApp({ onSignOut }) {
   const [milk, setMilk] = useState([]);
   const [construction, setConstruction] = useState([]);
   const [animals, setAnimals] = useState([]);
+  const [cats, setCats] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a] = await Promise.all([
+    const [e, m, v, mk, c, a, ct] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
+      fetchTable("categories"),
     ]);
-    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a);
+    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct);
     setLoading(false);
   };
 
   useEffect(() => { reload(); }, []);
+
+  // Build category lists from DB, falling back to defaults if empty.
+  const catList = (kind, fallback) => {
+    const fromDb = cats.filter((c) => c.kind === kind).map((c) => c.value);
+    return fromDb.length ? fromDb : fallback;
+  };
+  const categoryLists = {
+    expense: catList("expense", EXPENSE_CATEGORIES),
+    construction: catList("construction", CONSTRUCTION_CATEGORIES),
+    animal_type: catList("animal_type", ANIMAL_TYPES),
+    animal_status: catList("animal_status", ANIMAL_STATUSES),
+  };
 
   if (loading) {
     return <CenterMsg>Loading your farm records…</CenterMsg>;
@@ -145,6 +159,7 @@ function FarmApp({ onSignOut }) {
     { id: "animals", label: "Animals", icon: PawPrint },
     { id: "milk", label: "Milk", icon: Milk },
     { id: "construction", label: "Build", icon: Hammer },
+    { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
   return (
@@ -162,12 +177,13 @@ function FarmApp({ onSignOut }) {
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
         {tab === "dashboard" && <Dashboard {...{ expenses, medicines, vaccinations, milk, setTab }} />}
-        {tab === "expenses" && <Expenses {...{ expenses, setExpenses }} />}
+        {tab === "expenses" && <Expenses {...{ expenses, setExpenses }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
-        {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} />}
+        {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
-        {tab === "construction" && <Construction {...{ construction, setConstruction }} />}
+        {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
+        {tab === "settings" && <SettingsScreen {...{ cats, setCats }} />}
       </main>
 
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
@@ -311,18 +327,18 @@ function daysUntil(d) {
 }
 
 // ---------- expenses ----------
-function Expenses({ expenses, setExpenses }) {
+function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
-  const [form, setForm] = useState({ date: todayStr(), category: "Feed", amount: "", note: "" });
+  const [form, setForm] = useState({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
 
   const add = async () => {
     if (!form.amount) return;
     const row = { date: form.date, category: form.category, amount: Number(form.amount), note: form.note };
     const saved = await insertRow("expenses", row);
     if (saved) setExpenses([saved, ...expenses]);
-    setForm({ date: todayStr(), category: "Feed", amount: "", note: "" });
+    setForm({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
     setShowForm(false);
   };
   const remove = async (id) => {
@@ -343,7 +359,7 @@ function Expenses({ expenses, setExpenses }) {
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes or category" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
-        {["All", ...EXPENSE_CATEGORIES].map((c) => (
+        {["All", ...categories].map((c) => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterCat === c ? "#1e3a5f" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
@@ -372,7 +388,7 @@ function Expenses({ expenses, setExpenses }) {
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
           <Field label="Category">
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-              {EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              {categories.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Field>
           <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
@@ -621,11 +637,11 @@ function MilkProduction({ milk, setMilk, animals }) {
 // ---------- construction ----------
 const CONSTRUCTION_CATEGORIES = ["Materials", "Labour", "Contractor", "Permits", "Equipment", "Other"];
 
-function Construction({ construction, setConstruction }) {
+function Construction({ construction, setConstruction, categories = CONSTRUCTION_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
-  const blank = { date: todayStr(), item: "", category: "Materials", amount: "", vendor: "", note: "" };
+  const blank = { date: todayStr(), item: "", category: categories[0] || "Other", amount: "", vendor: "", note: "" };
   const [form, setForm] = useState(blank);
 
   const add = async () => {
@@ -663,7 +679,7 @@ function Construction({ construction, setConstruction }) {
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search item, vendor or note" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
-        {["All", ...CONSTRUCTION_CATEGORIES].map((c) => (
+        {["All", ...categories].map((c) => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterCat === c ? "#1c5fa8" : "white", color: filterCat === c ? "white" : "#3a4a3f", cursor: "pointer",
@@ -695,7 +711,7 @@ function Construction({ construction, setConstruction }) {
           <Field label="Item / description"><input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement 20 bags" style={inputStyle} /></Field>
           <Field label="Category">
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-              {CONSTRUCTION_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              {categories.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Field>
           <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
@@ -734,12 +750,12 @@ function ageFromDob(dob) {
   return `${months}m`;
 }
 
-function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
+function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = ANIMAL_TYPES, statuses = ANIMAL_STATUSES }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [selected, setSelected] = useState(null);
-  const blank = { tag: "", type: "Cow", breed: "", dob: "", status: "Active", note: "" };
+  const blank = { tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", note: "" };
   const [form, setForm] = useState(blank);
 
   const add = async () => {
@@ -819,7 +835,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tag or breed" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
-        {["All", ...ANIMAL_TYPES].map((c) => (
+        {["All", ...types].map((c) => (
           <button key={c} onClick={() => setFilterType(c)} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterType === c ? "#1e3a5f" : "white", color: filterType === c ? "white" : "#3a4a3f", cursor: "pointer",
@@ -845,20 +861,88 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines }) {
           <Field label="Tag ID / name"><input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="e.g. Cow #12" style={inputStyle} /></Field>
           <Field label="Type">
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
-              {ANIMAL_TYPES.map((t) => <option key={t}>{t}</option>)}
+              {types.map((t) => <option key={t}>{t}</option>)}
             </select>
           </Field>
           <Field label="Breed (optional)"><input value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} placeholder="e.g. Sahiwal" style={inputStyle} /></Field>
           <Field label="Date of birth (optional)"><input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} /></Field>
           <Field label="Status">
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
-              {ANIMAL_STATUSES.map((s) => <option key={s}>{s}</option>)}
+              {statuses.map((s) => <option key={s}>{s}</option>)}
             </select>
           </Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save animal</button>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ---------- settings: manage categories ----------
+function SettingsScreen({ cats, setCats }) {
+  const groups = [
+    { kind: "expense", title: "Expense categories" },
+    { kind: "construction", title: "Construction categories" },
+    { kind: "animal_type", title: "Animal types" },
+    { kind: "animal_status", title: "Animal statuses" },
+  ];
+  const [adding, setAdding] = useState({});
+
+  const addCat = async (kind) => {
+    const value = (adding[kind] || "").trim();
+    if (!value) return;
+    if (cats.some((c) => c.kind === kind && c.value.toLowerCase() === value.toLowerCase())) {
+      alert("That already exists."); return;
+    }
+    const saved = await insertRow("categories", { kind, value });
+    if (saved) setCats([...cats, saved]);
+    setAdding({ ...adding, [kind]: "" });
+  };
+  const removeCat = async (id) => {
+    if (await deleteRow("categories", id)) setCats(cats.filter((c) => c.id !== id));
+  };
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 700 }}>Settings</h2>
+      <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8a93a8" }}>
+        Add or remove your own categories. Changes are shared with everyone who logs in.
+      </p>
+
+      {groups.map((g) => {
+        const items = cats.filter((c) => c.kind === g.kind);
+        return (
+          <div key={g.kind} style={{ ...card }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>{g.title}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {items.length === 0 ? <span style={{ fontSize: 13, color: "#8a93a8" }}>Using defaults. Add one to customise.</span> :
+                items.map((c) => (
+                  <span key={c.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#eef1f7", border: "1px solid #d4dcec", borderRadius: 20, padding: "5px 8px 5px 12px", fontSize: 13 }}>
+                    {c.value}
+                    <button onClick={() => removeCat(c.id)} title="Remove" style={{ border: "none", background: "#e0e6f0", color: "#5a6478", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                      <X size={13} />
+                    </button>
+                  </span>
+                ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={adding[g.kind] || ""}
+                onChange={(e) => setAdding({ ...adding, [g.kind]: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && addCat(g.kind)}
+                placeholder={`Add a ${g.title.toLowerCase().replace(/s$/, "")}`}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button onClick={() => addCat(g.kind)} style={{ ...primaryBtn, padding: "10px 14px" }}><Plus size={18} /></button>
+            </div>
+          </div>
+        );
+      })}
+
+      <p style={{ fontSize: 12, color: "#8a93a8", marginTop: 4 }}>
+        Note: removing a category doesn't change records you already saved with it — it only stops it appearing in the dropdowns.
+      </p>
     </div>
   );
 }
