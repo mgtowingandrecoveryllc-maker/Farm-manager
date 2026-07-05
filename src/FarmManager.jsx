@@ -658,12 +658,12 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
-  const blank = { date: todayStr(), item: "", category: categories[0] || "Other", amount: "", vendor: "", note: "" };
+  const blank = { date: todayStr(), item: "", quantity: "", category: categories[0] || "Other", amount: "", vendor: "", note: "" };
   const [form, setForm] = useState(blank);
 
   const add = async () => {
     if (!form.item || !form.amount) return;
-    const row = { date: form.date, item: form.item, category: form.category, amount: Number(form.amount), vendor: form.vendor, note: form.note };
+    const row = { date: form.date, item: form.item, quantity: form.quantity, category: form.category, amount: Number(form.amount), vendor: form.vendor, note: form.note };
     const saved = await insertRow("construction", row);
     if (saved) setConstruction([saved, ...construction]);
     setForm(blank); setShowForm(false);
@@ -715,7 +715,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
         filtered.map((c) => (
           <div key={c.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{c.item} <span style={{ fontWeight: 800, color: "#1c5fa8", marginLeft: 6 }}>{fmt(c.amount)}</span></div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{c.item}{c.quantity ? <span style={{ fontWeight: 500, color: "#8a93a8" }}> × {c.quantity}</span> : null} <span style={{ fontWeight: 800, color: "#1c5fa8", marginLeft: 6 }}>{fmt(c.amount)}</span></div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{c.date} · {c.category}{c.vendor ? ` · ${c.vendor}` : ""}{c.note ? ` · ${c.note}` : ""}</div>
             </div>
             <button onClick={() => remove(c.id)} style={delBtn}><Trash2 size={18} /></button>
@@ -736,6 +736,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
               {(CONSTRUCTION_ITEMS[form.category] || []).map((it) => <option key={it} value={it} />)}
             </datalist>
           </Field>
+          <Field label="Quantity (optional)"><input value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="e.g. 20 bags, 3 trolly" style={inputStyle} /></Field>
           <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
           <Field label="Vendor / supplier (optional)"><input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="e.g. Khan Hardware" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
