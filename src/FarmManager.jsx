@@ -41,7 +41,7 @@ const exportCSV = (filename, rows) => {
   URL.revokeObjectURL(url);
 };
 
-const EXPENSE_CATEGORIES = ["Feed", "Medicine", "Labour", "Equipment", "Utilities", "Veterinary", "Maintenance", "Transport", "Other"];
+const EXPENSE_CATEGORIES = ["Feed", "Medicine", "Fuel", "Labour", "Equipment", "Utilities", "Veterinary", "Maintenance", "Transport", "Other"];
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
