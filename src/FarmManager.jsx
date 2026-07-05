@@ -635,7 +635,24 @@ function MilkProduction({ milk, setMilk, animals }) {
 }
 
 // ---------- construction ----------
-const CONSTRUCTION_CATEGORIES = ["Materials", "Labour", "Contractor", "Permits", "Equipment", "Other"];
+const CONSTRUCTION_CATEGORIES = ["Cement & Concrete", "Steel & Reinforcement", "Masonry Materials", "Earthwork", "Shuttering & Fabrication", "Plumbing & Water", "Electrical", "Labour", "Transportation & Logistics", "Tools & Equipment", "Site Materials", "Office & Welfare", "Agriculture & Farm", "Miscellaneous"];
+
+const CONSTRUCTION_ITEMS = {
+  "Cement & Concrete": ["Cement Bag", "Concrete", "Foundation Concrete", "Roof Concrete", "Crush CFT", "Crush Trolly", "Pan CFT"],
+  "Steel & Reinforcement": ["Steel", "Binding Wire", "Steel Fixer", "Column"],
+  "Masonry Materials": ["Blocks", "Brick", "Sand Trolly", "Sand Dumper", "Aggregate Trolly"],
+  "Earthwork": ["Earth Filling Trolly", "Excavator", "Tractor Hour", "Land Ploughing"],
+  "Shuttering & Fabrication": ["Shutter Material", "Material Frame", "Gate Material", "Gate and Pegs", "Doors", "Prefab Roof"],
+  "Plumbing & Water": ["Water Tank", "Water Pump", "Water Pipe", "Water", "Sanitary Store", "Gutter Labour"],
+  "Electrical": ["Electric Items", "Electric Bill", "Electrician", "Motor", "Motor Dapi Wire"],
+  "Labour": ["Labour", "Labour SF", "Labour Frame", "Mason", "Shuttering"],
+  "Transportation & Logistics": ["Freight", "Rent Generator"],
+  "Tools & Equipment": ["Petrol Generator", "Air Cooler", "Water Cooler", "Mobile Phone"],
+  "Site Materials": ["Plastic Sheet", "Material", "Wall Cleaning", "Rari"],
+  "Office & Welfare": ["Food", "Tea", "Arrangement"],
+  "Agriculture & Farm": ["Seed", "Gobar Trolly", "Bags for Bhosa", "Bosa"],
+  "Miscellaneous": ["Hamza", "Naiza Bazi", "Riksha", "Washing Machine"],
+};
 
 function Construction({ construction, setConstruction, categories = CONSTRUCTION_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
@@ -708,7 +725,12 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
       {showForm && (
         <Modal title="Add construction cost" onClose={() => setShowForm(false)}>
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
-          <Field label="Item / description"><input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement 20 bags" style={inputStyle} /></Field>
+          <Field label="Item / description">
+            <input list="construction-items" value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement Bag" style={inputStyle} />
+            <datalist id="construction-items">
+              {(CONSTRUCTION_ITEMS[form.category] || []).map((it) => <option key={it} value={it} />)}
+            </datalist>
+          </Field>
           <Field label="Category">
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
               {categories.map((c) => <option key={c}>{c}</option>)}
