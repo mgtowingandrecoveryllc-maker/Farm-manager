@@ -725,16 +725,16 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
       {showForm && (
         <Modal title="Add construction cost" onClose={() => setShowForm(false)}>
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Category">
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+              {categories.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </Field>
           <Field label="Item / description">
             <input list="construction-items" value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement Bag" style={inputStyle} />
             <datalist id="construction-items">
               {(CONSTRUCTION_ITEMS[form.category] || []).map((it) => <option key={it} value={it} />)}
             </datalist>
-          </Field>
-          <Field label="Category">
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-              {categories.map((c) => <option key={c}>{c}</option>)}
-            </select>
           </Field>
           <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
           <Field label="Vendor / supplier (optional)"><input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="e.g. Khan Hardware" style={inputStyle} /></Field>
