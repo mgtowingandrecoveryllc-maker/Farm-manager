@@ -560,44 +560,70 @@ function Vaccinations({ vaccinations, setVaccinations, animals }) {
 }
 
 // ---------- milk ----------
+const MILK_SPECIES = ["Cow", "Buffalo", "Goat"];
+
 function MilkProduction({ milk, setMilk, animals }) {
   const [showForm, setShowForm] = useState(false);
-  const blank = { date: todayStr(), session: "Morning", litres: "", animal: "", note: "" };
+  const [view, setView] = useState("Cow");
+  const blank = { date: todayStr(), session: "Morning", species: "Cow", litres: "", animal: "", note: "" };
   const [form, setForm] = useState(blank);
 
   const add = async () => {
     if (!form.litres) return;
-    const row = { date: form.date, session: form.session, litres: Number(form.litres), animal: form.animal, note: form.note };
+    const row = { date: form.date, session: form.session, species: form.species, litres: Number(form.litres), animal: form.animal, note: form.note };
     const saved = await insertRow("milk", row);
     if (saved) setMilk([saved, ...milk]);
-    setForm({ ...blank, date: form.date });
+    setForm({ ...blank, date: form.date, species: form.species });
     setShowForm(false);
   };
   const remove = async (id) => {
     if (await deleteRow("milk", id)) setMilk(milk.filter((m) => m.id !== id));
   };
 
-  const last7 = useMemo(() => {
+  // records for the currently viewed species (older records without species treated as Cow)
+  const speciesMilk = milk.filter((m) => (m.species || "Cow") === view);
+
+  const last7 = (() => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
       const ds = d.toISOString().slice(0, 10);
-      const total = milk.filter((m) => m.date === ds).reduce((s, m) => s + Number(m.litres), 0);
+      const total = speciesMilk.filter((m) => m.date === ds).reduce((s, m) => s + Number(m.litres), 0);
       days.push({ ds, total, label: d.toLocaleDateString(undefined, { weekday: "short" }) });
     }
     return days;
-  }, [milk]);
+  })();
   const maxDay = Math.max(...last7.map((d) => d.total), 1);
   const weekTotal = last7.reduce((s, d) => s + d.total, 0);
   const avg = weekTotal / 7;
+
+  // per-animal breakdown within this species (all-time totals)
+  const perAnimal = (() => {
+    const map = {};
+    speciesMilk.forEach((m) => {
+      const key = m.animal && m.animal.trim() ? m.animal.trim() : "Unspecified";
+      map[key] = (map[key] || 0) + Number(m.litres);
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  })();
 
   return (
     <div>
       <SectionHeader title="Milk production" onAdd={() => setShowForm(true)} addLabel="Log" onExport={() => exportCSV("milk.csv", milk)} />
 
+      {/* species switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {MILK_SPECIES.map((s) => (
+          <button key={s} onClick={() => setView(s)} style={{
+            flex: 1, border: "1px solid #cdd6e6", borderRadius: 10, padding: "9px 6px", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            background: view === s ? "#1e3a5f" : "white", color: view === s ? "white" : "#3a4a3f",
+          }}>{s}</button>
+        ))}
+      </div>
+
       <div style={card}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-          <div><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>7-day total</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{fmt(weekTotal)} L</div></div>
+          <div><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>{view} · 7-day total</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{fmt(weekTotal)} L</div></div>
           <div style={{ textAlign: "right" }}><div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Daily average</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f" }}>{fmt(avg)} L</div></div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
@@ -613,8 +639,22 @@ function MilkProduction({ milk, setMilk, animals }) {
         </div>
       </div>
 
-      {milk.length === 0 ? <Empty icon={Milk} text="No milk logged yet. Tap Log to start." /> :
-        milk.slice(0, 60).map((m) => (
+      {/* per-animal breakdown for this species */}
+      <div style={card}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>{view} — by animal (all time)</div>
+        {perAnimal.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>No {view.toLowerCase()} milk logged yet.</div> :
+          perAnimal.map(([name, total]) => (
+            <div key={name} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "6px 0", borderBottom: "1px solid #eef1f7" }}>
+              <span style={{ fontWeight: 600 }}>{name}</span>
+              <span style={{ fontWeight: 700, color: "#1e3a5f" }}>{fmt(total)} L</span>
+            </div>
+          ))}
+      </div>
+
+      {/* recent entries for this species */}
+      <div style={{ fontWeight: 700, fontSize: 15, margin: "16px 0 8px" }}>Recent {view.toLowerCase()} entries</div>
+      {speciesMilk.length === 0 ? <Empty icon={Milk} text={`No ${view.toLowerCase()} milk logged yet. Tap Log to start.`} /> :
+        speciesMilk.slice(0, 60).map((m) => (
           <div key={m.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{fmt(m.litres)} L <span style={{ fontWeight: 500, fontSize: 13, color: "#8a93a8" }}>· {m.session}</span></div>
@@ -634,8 +674,13 @@ function MilkProduction({ milk, setMilk, animals }) {
               </select>
             </Field></div>
           </div>
+          <Field label="Species">
+            <select value={form.species} onChange={(e) => setForm({ ...form, species: e.target.value })} style={inputStyle}>
+              {MILK_SPECIES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
+          <Field label="Animal (e.g. Cow 1, Buffalo 2)"><input value={form.animal} onChange={(e) => setForm({ ...form, animal: e.target.value })} placeholder={`e.g. ${form.species} 1`} style={inputStyle} /></Field>
           <Field label="Litres"><input type="number" inputMode="decimal" value={form.litres} onChange={(e) => setForm({ ...form, litres: e.target.value })} placeholder="0" style={inputStyle} /></Field>
-          <AnimalField label="Animal (optional)" value={form.animal} onChange={(e) => setForm({ ...form, animal: e.target.value })} animals={animals} placeholder="e.g. Cow #12 or total" />
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save</button>
         </Modal>
