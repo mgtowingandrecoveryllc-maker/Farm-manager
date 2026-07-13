@@ -41,7 +41,8 @@ const exportCSV = (filename, rows) => {
   URL.revokeObjectURL(url);
 };
 
-const EXPENSE_CATEGORIES = ["Feed", "Medicine", "Fuel", "Labour", "Equipment", "Utilities", "Veterinary", "Maintenance", "Transport", "Other"];
+const EXPENSE_CATEGORIES = ["Feed", "Medicine", "Fuel", "Salary", "Labour", "Equipment", "Utilities", "Veterinary", "Maintenance", "Transport", "Other"];
+const EMPLOYEES = ["Waseem", "Rafeeq", "Naveed", "Doctor"];
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
@@ -387,12 +388,21 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
         <Modal title="Add expense" onClose={() => setShowForm(false)}>
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
           <Field label="Category">
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value, note: "" })} style={inputStyle}>
               {categories.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Field>
           <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
-          <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. 50kg cattle feed" style={inputStyle} /></Field>
+          {form.category === "Salary" ? (
+            <Field label="Employee">
+              <input list="employees" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Select or type employee name" style={inputStyle} />
+              <datalist id="employees">
+                {EMPLOYEES.map((n) => <option key={n} value={n} />)}
+              </datalist>
+            </Field>
+          ) : (
+            <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. 50kg cattle feed" style={inputStyle} /></Field>
+          )}
           <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save expense</button>
         </Modal>
       )}
