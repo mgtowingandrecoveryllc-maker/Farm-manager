@@ -160,7 +160,7 @@ function FarmApp({ onSignOut }) {
     { id: "animals", label: "Animals", icon: PawPrint },
     { id: "milk", label: "Milk", icon: Milk },
     { id: "construction", label: "Build", icon: Hammer },
-    { id: "settings", label: "Settings", icon: SettingsIcon },
+    { id: "reports", label: "Reports", icon: TrendingUp },
   ];
 
   return (
@@ -171,6 +171,7 @@ function FarmApp({ onSignOut }) {
           <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Farm Manager</h1>
         </div>
         <div style={{ display: "flex", gap: 14 }}>
+          <button onClick={() => setTab("settings")} title="Settings" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><SettingsIcon size={19} /></button>
           <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><RefreshCw size={19} /></button>
           <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><LogOut size={19} /></button>
         </div>
@@ -184,6 +185,7 @@ function FarmApp({ onSignOut }) {
         {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
+        {tab === "reports" && <Reports {...{ expenses, construction, milk }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats }} />}
       </main>
 
@@ -327,11 +329,37 @@ function daysUntil(d) {
   return Math.ceil((new Date(d) - new Date(todayStr())) / 86400000);
 }
 
+// ---------- month helpers ----------
+const monthLabel = (ym) => {
+  if (ym === "All") return "All time";
+  const [y, m] = ym.split("-");
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+};
+// Build list of months present in a set of records, newest first
+const monthsFrom = (rows) => {
+  const set = new Set(rows.filter((r) => r.date).map((r) => r.date.slice(0, 7)));
+  return Array.from(set).sort().reverse();
+};
+function MonthFilter({ months, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
+      {["All", ...months].map((m) => (
+        <button key={m} onClick={() => onChange(m)} style={{
+          whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+          background: value === m ? "#c79a2e" : "white", color: value === m ? "#1f2d24" : "#3a4a3f",
+          fontWeight: value === m ? 700 : 500, cursor: "pointer",
+        }}>{monthLabel(m)}</button>
+      ))}
+    </div>
+  );
+}
+
 // ---------- expenses ----------
 function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
+  const [filterMonth, setFilterMonth] = useState("All");
   const [form, setForm] = useState({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
 
   const add = async () => {
@@ -348,9 +376,22 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
 
   const filtered = expenses.filter((e) =>
     (filterCat === "All" || e.category === filterCat) &&
+    (filterMonth === "All" || (e.date || "").startsWith(filterMonth)) &&
     (e.note?.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()))
   );
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
+  const months = monthsFrom(expenses);
+
+  // category breakdown for the current month/search selection
+  const breakdown = (() => {
+    const inScope = expenses.filter((e) =>
+      (filterMonth === "All" || (e.date || "").startsWith(filterMonth))
+    );
+    const map = {};
+    inScope.forEach((e) => { map[e.category] = (map[e.category] || 0) + Number(e.amount); });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  })();
+  const breakdownTotal = breakdown.reduce((s, [, v]) => s + v, 0);
 
   return (
     <div>
@@ -359,6 +400,7 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes or category" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
+      <MonthFilter months={months} value={filterMonth} onChange={setFilterMonth} />
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
         {["All", ...categories].map((c) => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
@@ -372,6 +414,25 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
         <span style={{ fontWeight: 600 }}>Total shown</span>
         <span style={{ fontWeight: 800, color: "#c0392b" }}>{fmt(total)}</span>
       </div>
+
+      {breakdown.length > 0 && (
+        <div style={card}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>
+            {monthLabel(filterMonth)} — by category
+            <span style={{ float: "right", color: "#c0392b", fontWeight: 800 }}>{fmt(breakdownTotal)}</span>
+          </div>
+          {breakdown.map(([cat, amt]) => (
+            <div key={cat} style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                <span style={{ fontWeight: 600 }}>{cat}</span><span>{fmt(amt)}</span>
+              </div>
+              <div style={{ background: "#eef1f7", borderRadius: 6, height: 7 }}>
+                <div style={{ width: `${(amt / (breakdown[0]?.[1] || 1)) * 100}%`, background: "#c79a2e", height: 7, borderRadius: 6 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 ? <Empty icon={Wallet} text="No expenses match. Tap Add to record one." /> :
         filtered.map((e) => (
@@ -713,6 +774,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
+  const [filterMonth, setFilterMonth] = useState("All");
   const blank = { date: todayStr(), item: "", quantity: "", category: categories[0] || "Other", amount: "", vendor: "", note: "" };
   const [form, setForm] = useState(blank);
 
@@ -729,12 +791,22 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
 
   const filtered = construction.filter((c) =>
     (filterCat === "All" || c.category === filterCat) &&
+    (filterMonth === "All" || (c.date || "").startsWith(filterMonth)) &&
     ((c.item || "").toLowerCase().includes(query.toLowerCase()) ||
      (c.vendor || "").toLowerCase().includes(query.toLowerCase()) ||
      (c.note || "").toLowerCase().includes(query.toLowerCase()))
   );
   const grandTotal = construction.reduce((s, c) => s + Number(c.amount), 0);
   const shownTotal = filtered.reduce((s, c) => s + Number(c.amount), 0);
+  const months = monthsFrom(construction);
+
+  const breakdown = (() => {
+    const inScope = construction.filter((c) => (filterMonth === "All" || (c.date || "").startsWith(filterMonth)));
+    const map = {};
+    inScope.forEach((c) => { map[c.category] = (map[c.category] || 0) + Number(c.amount); });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  })();
+  const breakdownTotal = breakdown.reduce((s, [, v]) => s + v, 0);
 
   return (
     <div>
@@ -750,6 +822,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search item, vendor or note" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
+      <MonthFilter months={months} value={filterMonth} onChange={setFilterMonth} />
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
         {["All", ...categories].map((c) => (
           <button key={c} onClick={() => setFilterCat(c)} style={{
@@ -759,10 +832,27 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
         ))}
       </div>
 
-      {filterCat !== "All" && (
-        <div style={{ ...card, padding: "10px 16px", display: "flex", justifyContent: "space-between", background: "#eaf0f6" }}>
-          <span style={{ fontWeight: 600 }}>{filterCat} total</span>
-          <span style={{ fontWeight: 800, color: "#1c5fa8" }}>{fmt(shownTotal)}</span>
+      <div style={{ ...card, padding: "10px 16px", display: "flex", justifyContent: "space-between", background: "#eaf0f6" }}>
+        <span style={{ fontWeight: 600 }}>{filterCat === "All" ? "Total shown" : `${filterCat} total`}{filterMonth !== "All" ? ` · ${monthLabel(filterMonth)}` : ""}</span>
+        <span style={{ fontWeight: 800, color: "#1c5fa8" }}>{fmt(shownTotal)}</span>
+      </div>
+
+      {breakdown.length > 0 && (
+        <div style={card}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>
+            {monthLabel(filterMonth)} — by category
+            <span style={{ float: "right", color: "#1c5fa8", fontWeight: 800 }}>{fmt(breakdownTotal)}</span>
+          </div>
+          {breakdown.map(([cat, amt]) => (
+            <div key={cat} style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                <span style={{ fontWeight: 600 }}>{cat}</span><span>{fmt(amt)}</span>
+              </div>
+              <div style={{ background: "#eef1f7", borderRadius: 6, height: 7 }}>
+                <div style={{ width: `${(amt / (breakdown[0]?.[1] || 1)) * 100}%`, background: "#1c5fa8", height: 7, borderRadius: 6 }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1021,6 +1111,67 @@ function SettingsScreen({ cats, setCats }) {
       <p style={{ fontSize: 12, color: "#8a93a8", marginTop: 4 }}>
         Note: removing a category doesn't change records you already saved with it — it only stops it appearing in the dropdowns.
       </p>
+    </div>
+  );
+}
+
+// ---------- reports: month-by-month totals ----------
+function Reports({ expenses, construction, milk }) {
+  const [scope, setScope] = useState("farm"); // farm | build
+
+  const rows = scope === "farm" ? expenses : construction;
+  const accent = scope === "farm" ? "#c0392b" : "#1c5fa8";
+  const months = monthsFrom(rows);
+
+  const monthTotals = months.map((m) => {
+    const inMonth = rows.filter((r) => (r.date || "").startsWith(m));
+    const total = inMonth.reduce((s, r) => s + Number(r.amount), 0);
+    const map = {};
+    inMonth.forEach((r) => { map[r.category] = (map[r.category] || 0) + Number(r.amount); });
+    const cats = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return { month: m, total, cats, count: inMonth.length };
+  });
+  const maxMonth = Math.max(...monthTotals.map((m) => m.total), 1);
+  const grand = rows.reduce((s, r) => s + Number(r.amount), 0);
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 12px", fontSize: 19, fontWeight: 700 }}>Reports</h2>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[["farm", "Farm expenses"], ["build", "Construction"]].map(([k, label]) => (
+          <button key={k} onClick={() => setScope(k)} style={{
+            flex: 1, border: "1px solid #cdd6e6", borderRadius: 10, padding: "10px 6px", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            background: scope === k ? "#1e3a5f" : "white", color: scope === k ? "white" : "#3a4a3f",
+          }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ ...card, background: "#eef1f7" }}>
+        <div style={{ fontSize: 12, color: "#5a6e82", fontWeight: 600 }}>{scope === "farm" ? "Total farm expenses" : "Total construction cost"}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: accent, marginTop: 4 }}>{fmt(grand)}</div>
+        <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 2 }}>{rows.length} entries across {months.length} month{months.length === 1 ? "" : "s"}</div>
+      </div>
+
+      {monthTotals.length === 0 ? <Empty icon={TrendingUp} text="No records yet." /> :
+        monthTotals.map((m) => (
+          <div key={m.month} style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+              <span style={{ fontWeight: 800, fontSize: 16 }}>{monthLabel(m.month)}</span>
+              <span style={{ fontWeight: 800, fontSize: 17, color: accent }}>{fmt(m.total)}</span>
+            </div>
+            <div style={{ background: "#eef1f7", borderRadius: 6, height: 8, marginBottom: 10 }}>
+              <div style={{ width: `${(m.total / maxMonth) * 100}%`, background: accent, height: 8, borderRadius: 6 }} />
+            </div>
+            {m.cats.map(([cat, amt]) => (
+              <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0", borderBottom: "1px solid #f2f5f9" }}>
+                <span style={{ color: "#5a6478" }}>{cat}</span>
+                <span style={{ fontWeight: 600 }}>{fmt(amt)}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 8 }}>{m.count} entries</div>
+          </div>
+        ))}
     </div>
   );
 }
