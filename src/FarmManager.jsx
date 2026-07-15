@@ -357,18 +357,32 @@ function MonthFilter({ months, value, onChange }) {
 // ---------- expenses ----------
 function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
-  const [form, setForm] = useState({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
+  const blankForm = () => ({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
+  const [form, setForm] = useState(blankForm());
 
-  const add = async () => {
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (e) => {
+    setEditingId(e.id);
+    setForm({ date: e.date || todayStr(), category: e.category || categories[0], amount: String(e.amount ?? ""), note: e.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
     if (!form.amount) return;
     const row = { date: form.date, category: form.category, amount: Number(form.amount), note: form.note };
-    const saved = await insertRow("expenses", row);
-    if (saved) setExpenses([saved, ...expenses]);
-    setForm({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
-    setShowForm(false);
+    if (editingId) {
+      if (await updateRow("expenses", editingId, row)) {
+        setExpenses(expenses.map((e) => e.id === editingId ? { ...e, ...row } : e));
+      }
+    } else {
+      const saved = await insertRow("expenses", row);
+      if (saved) setExpenses([saved, ...expenses]);
+    }
+    setForm(blankForm()); setEditingId(null); setShowForm(false);
   };
   const remove = async (id) => {
     if (await deleteRow("expenses", id)) setExpenses(expenses.filter((e) => e.id !== id));
@@ -395,7 +409,7 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
 
   return (
     <div>
-      <SectionHeader title="Expenses" onAdd={() => setShowForm(true)} onExport={() => exportCSV("expenses.csv", expenses)} />
+      <SectionHeader title="Expenses" onAdd={openAdd} onExport={() => exportCSV("expenses.csv", expenses)} />
       <div style={{ position: "relative", marginBottom: 10 }}>
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes or category" style={{ ...inputStyle, paddingLeft: 36 }} />
@@ -437,7 +451,7 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
       {filtered.length === 0 ? <Empty icon={Wallet} text="No expenses match. Tap Add to record one." /> :
         filtered.map((e) => (
           <div key={e.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
+            <div onClick={() => openEdit(e)} style={{ cursor: "pointer", flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{e.category} <span style={{ fontWeight: 800, color: "#c0392b", marginLeft: 6 }}>{fmt(e.amount)}</span></div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{e.date}{e.note ? ` · ${e.note}` : ""}</div>
             </div>
@@ -446,10 +460,10 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
         ))}
 
       {showForm && (
-        <Modal title="Add expense" onClose={() => setShowForm(false)}>
+        <Modal title={editingId ? "Edit expense" : "Add expense"} onClose={() => { setShowForm(false); setEditingId(null); }}>
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
           <Field label="Category">
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value, note: "" })} style={inputStyle}>
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
               {categories.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Field>
@@ -464,7 +478,7 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
           ) : (
             <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. 50kg cattle feed" style={inputStyle} /></Field>
           )}
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save expense</button>
+          <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update expense" : "Save expense"}</button>
         </Modal>
       )}
     </div>
@@ -474,19 +488,33 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
 // ---------- medicines ----------
 function Medicines({ medicines, setMedicines, animals }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
-  const blank = { name: "", quantity: "", unit: "units", low_threshold: "", expiry: "", note: "" };
-  const [form, setForm] = useState(blank);
+  const blankForm = () => ({ name: "", quantity: "", unit: "units", low_threshold: "", expiry: "", note: "" });
+  const [form, setForm] = useState(blankForm());
 
-  const add = async () => {
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (m) => {
+    setEditingId(m.id);
+    setForm({ name: m.name || "", quantity: String(m.quantity ?? ""), unit: m.unit || "units", low_threshold: String(m.low_threshold ?? ""), expiry: m.expiry || "", note: m.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
     if (!form.name) return;
     const row = {
       name: form.name, quantity: Number(form.quantity || 0), unit: form.unit,
       low_threshold: Number(form.low_threshold || 0), expiry: form.expiry || null, note: form.note,
     };
-    const saved = await insertRow("medicines", row);
-    if (saved) setMedicines([saved, ...medicines]);
-    setForm(blank); setShowForm(false);
+    if (editingId) {
+      if (await updateRow("medicines", editingId, row)) {
+        setMedicines(medicines.map((m) => m.id === editingId ? { ...m, ...row } : m));
+      }
+    } else {
+      const saved = await insertRow("medicines", row);
+      if (saved) setMedicines([saved, ...medicines]);
+    }
+    setForm(blankForm()); setEditingId(null); setShowForm(false);
   };
   const adjust = async (id, delta) => {
     const m = medicines.find((x) => x.id === id);
@@ -501,7 +529,7 @@ function Medicines({ medicines, setMedicines, animals }) {
 
   return (
     <div>
-      <SectionHeader title="Medicines at farm" onAdd={() => setShowForm(true)} onExport={() => exportCSV("medicines.csv", medicines)} />
+      <SectionHeader title="Medicines at farm" onAdd={openAdd} onExport={() => exportCSV("medicines.csv", medicines)} />
       <div style={{ position: "relative", marginBottom: 12 }}>
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medicine" style={{ ...inputStyle, paddingLeft: 36 }} />
@@ -514,7 +542,7 @@ function Medicines({ medicines, setMedicines, animals }) {
           return (
             <div key={m.id} style={{ ...card, padding: 14, marginBottom: 10, borderLeft: low ? "4px solid #e0a800" : "4px solid #c79a2e" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
+                <div onClick={() => openEdit(m)} style={{ cursor: "pointer", flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{m.name}</div>
                   <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 3 }}>
                     {m.expiry ? `Expires ${m.expiry}${exp <= 30 && exp >= 0 ? ` · ${exp}d left` : exp < 0 ? " · EXPIRED" : ""}` : "No expiry set"}
@@ -534,7 +562,7 @@ function Medicines({ medicines, setMedicines, animals }) {
         })}
 
       {showForm && (
-        <Modal title="Add medicine" onClose={() => setShowForm(false)}>
+        <Modal title={editingId ? "Edit medicine" : "Add medicine"} onClose={() => { setShowForm(false); setEditingId(null); }}>
           <Field label="Medicine name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Oxytetracycline" style={inputStyle} /></Field>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}><Field label="Quantity"><input type="number" inputMode="decimal" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="0" style={inputStyle} /></Field></div>
@@ -543,7 +571,7 @@ function Medicines({ medicines, setMedicines, animals }) {
           <Field label="Low-stock alert below"><input type="number" inputMode="decimal" value={form.low_threshold} onChange={(e) => setForm({ ...form, low_threshold: e.target.value })} placeholder="e.g. 2" style={inputStyle} /></Field>
           <Field label="Expiry date (optional)"><input type="date" value={form.expiry} onChange={(e) => setForm({ ...form, expiry: e.target.value })} style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. for mastitis" style={inputStyle} /></Field>
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save medicine</button>
+          <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update medicine" : "Save medicine"}</button>
         </Modal>
       )}
     </div>
@@ -553,19 +581,33 @@ function Medicines({ medicines, setMedicines, animals }) {
 // ---------- vaccinations ----------
 function Vaccinations({ vaccinations, setVaccinations, animals }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
-  const blank = { animal: "", vaccine: "", date: todayStr(), next_due: "", given_by: "", note: "" };
-  const [form, setForm] = useState(blank);
+  const blankForm = () => ({ animal: "", vaccine: "", date: todayStr(), next_due: "", given_by: "", note: "" });
+  const [form, setForm] = useState(blankForm());
 
-  const add = async () => {
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (v) => {
+    setEditingId(v.id);
+    setForm({ animal: v.animal || "", vaccine: v.vaccine || "", date: v.date || todayStr(), next_due: v.next_due || "", given_by: v.given_by || "", note: v.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
     if (!form.animal || !form.vaccine) return;
     const row = {
       animal: form.animal, vaccine: form.vaccine, date: form.date,
       next_due: form.next_due || null, given_by: form.given_by, note: form.note,
     };
-    const saved = await insertRow("vaccinations", row);
-    if (saved) setVaccinations([saved, ...vaccinations]);
-    setForm(blank); setShowForm(false);
+    if (editingId) {
+      if (await updateRow("vaccinations", editingId, row)) {
+        setVaccinations(vaccinations.map((v) => v.id === editingId ? { ...v, ...row } : v));
+      }
+    } else {
+      const saved = await insertRow("vaccinations", row);
+      if (saved) setVaccinations([saved, ...vaccinations]);
+    }
+    setForm(blankForm()); setEditingId(null); setShowForm(false);
   };
   const remove = async (id) => {
     if (await deleteRow("vaccinations", id)) setVaccinations(vaccinations.filter((v) => v.id !== id));
@@ -578,7 +620,7 @@ function Vaccinations({ vaccinations, setVaccinations, animals }) {
 
   return (
     <div>
-      <SectionHeader title="Vaccination record" onAdd={() => setShowForm(true)} onExport={() => exportCSV("vaccinations.csv", vaccinations)} />
+      <SectionHeader title="Vaccination record" onAdd={openAdd} onExport={() => exportCSV("vaccinations.csv", vaccinations)} />
       {upcoming.length > 0 && (
         <div style={{ ...card, background: "#eef6ff", border: "1px solid #bcdcff" }}>
           <div style={{ fontWeight: 700, color: "#1c5fa8", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}><Calendar size={17} /> Due soon</div>
@@ -593,7 +635,7 @@ function Vaccinations({ vaccinations, setVaccinations, animals }) {
       {filtered.length === 0 ? <Empty icon={Syringe} text="No vaccination records yet." /> :
         filtered.map((v) => (
           <div key={v.id} style={{ ...card, padding: 14, marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
-            <div>
+            <div onClick={() => openEdit(v)} style={{ cursor: "pointer", flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{v.animal} · {v.vaccine}</div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 3 }}>
                 Given {v.date}{v.given_by ? ` by ${v.given_by}` : ""}{v.next_due ? ` · next due ${v.next_due}` : ""}{v.note ? ` · ${v.note}` : ""}
@@ -604,7 +646,7 @@ function Vaccinations({ vaccinations, setVaccinations, animals }) {
         ))}
 
       {showForm && (
-        <Modal title="Record vaccination" onClose={() => setShowForm(false)}>
+        <Modal title={editingId ? "Edit vaccination" : "Record vaccination"} onClose={() => { setShowForm(false); setEditingId(null); }}>
           <AnimalField label="Animal / tag ID" value={form.animal} onChange={(e) => setForm({ ...form, animal: e.target.value })} animals={animals} placeholder="e.g. Cow #12 or whole herd" />
           <Field label="Vaccine"><input value={form.vaccine} onChange={(e) => setForm({ ...form, vaccine: e.target.value })} placeholder="e.g. FMD, HS, Brucella" style={inputStyle} /></Field>
           <div style={{ display: "flex", gap: 10 }}>
@@ -613,7 +655,7 @@ function Vaccinations({ vaccinations, setVaccinations, animals }) {
           </div>
           <Field label="Given by (optional)"><input value={form.given_by} onChange={(e) => setForm({ ...form, given_by: e.target.value })} placeholder="e.g. Dr. Khan" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save record</button>
+          <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update record" : "Save record"}</button>
         </Modal>
       )}
     </div>
@@ -625,17 +667,31 @@ const MILK_SPECIES = ["Cow", "Buffalo", "Goat"];
 
 function MilkProduction({ milk, setMilk, animals }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [view, setView] = useState("Cow");
-  const blank = { date: todayStr(), session: "Morning", species: "Cow", litres: "", animal: "", note: "" };
-  const [form, setForm] = useState(blank);
+  const blankForm = () => ({ date: todayStr(), session: "Morning", species: "Cow", litres: "", animal: "", note: "" });
+  const [form, setForm] = useState(blankForm());
 
-  const add = async () => {
+  const openAdd = () => { setEditingId(null); setForm({ ...blankForm(), species: view }); setShowForm(true); };
+  const openEdit = (m) => {
+    setEditingId(m.id);
+    setForm({ date: m.date || todayStr(), session: m.session || "Morning", species: m.species || "Cow", litres: String(m.litres ?? ""), animal: m.animal || "", note: m.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
     if (!form.litres) return;
     const row = { date: form.date, session: form.session, species: form.species, litres: Number(form.litres), animal: form.animal, note: form.note };
-    const saved = await insertRow("milk", row);
-    if (saved) setMilk([saved, ...milk]);
-    setForm({ ...blank, date: form.date, species: form.species });
-    setShowForm(false);
+    if (editingId) {
+      if (await updateRow("milk", editingId, row)) {
+        setMilk(milk.map((m) => m.id === editingId ? { ...m, ...row } : m));
+      }
+    } else {
+      const saved = await insertRow("milk", row);
+      if (saved) setMilk([saved, ...milk]);
+    }
+    setForm({ ...blankForm(), date: form.date, species: form.species });
+    setEditingId(null); setShowForm(false);
   };
   const remove = async (id) => {
     if (await deleteRow("milk", id)) setMilk(milk.filter((m) => m.id !== id));
@@ -670,7 +726,7 @@ function MilkProduction({ milk, setMilk, animals }) {
 
   return (
     <div>
-      <SectionHeader title="Milk production" onAdd={() => setShowForm(true)} addLabel="Log" onExport={() => exportCSV("milk.csv", milk)} />
+      <SectionHeader title="Milk production" onAdd={openAdd} addLabel="Log" onExport={() => exportCSV("milk.csv", milk)} />
 
       {/* species switcher */}
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
@@ -717,7 +773,7 @@ function MilkProduction({ milk, setMilk, animals }) {
       {speciesMilk.length === 0 ? <Empty icon={Milk} text={`No ${view.toLowerCase()} milk logged yet. Tap Log to start.`} /> :
         speciesMilk.slice(0, 60).map((m) => (
           <div key={m.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
+            <div onClick={() => openEdit(m)} style={{ cursor: "pointer", flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{fmt(m.litres)} L <span style={{ fontWeight: 500, fontSize: 13, color: "#8a93a8" }}>· {m.session}</span></div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{m.date}{m.animal ? ` · ${m.animal}` : ""}{m.note ? ` · ${m.note}` : ""}</div>
             </div>
@@ -726,7 +782,7 @@ function MilkProduction({ milk, setMilk, animals }) {
         ))}
 
       {showForm && (
-        <Modal title="Log milk" onClose={() => setShowForm(false)}>
+        <Modal title={editingId ? "Edit milk entry" : "Log milk"} onClose={() => { setShowForm(false); setEditingId(null); }}>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}><Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field></div>
             <div style={{ flex: 1 }}><Field label="Session">
@@ -743,7 +799,7 @@ function MilkProduction({ milk, setMilk, animals }) {
           <Field label="Animal (e.g. Cow 1, Buffalo 2)"><input value={form.animal} onChange={(e) => setForm({ ...form, animal: e.target.value })} placeholder={`e.g. ${form.species} 1`} style={inputStyle} /></Field>
           <Field label="Litres"><input type="number" inputMode="decimal" value={form.litres} onChange={(e) => setForm({ ...form, litres: e.target.value })} placeholder="0" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save</button>
+          <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update" : "Save"}</button>
         </Modal>
       )}
     </div>
@@ -772,18 +828,32 @@ const CONSTRUCTION_ITEMS = {
 
 function Construction({ construction, setConstruction, categories = CONSTRUCTION_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
-  const blank = { date: todayStr(), item: "", quantity: "", category: categories[0] || "Other", amount: "", vendor: "", note: "" };
-  const [form, setForm] = useState(blank);
+  const blankForm = () => ({ date: todayStr(), item: "", quantity: "", category: categories[0] || "Other", amount: "", vendor: "", note: "" });
+  const [form, setForm] = useState(blankForm());
 
-  const add = async () => {
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (c) => {
+    setEditingId(c.id);
+    setForm({ date: c.date || todayStr(), item: c.item || "", quantity: c.quantity || "", category: c.category || categories[0], amount: String(c.amount ?? ""), vendor: c.vendor || "", note: c.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
     if (!form.item || !form.amount) return;
     const row = { date: form.date, item: form.item, quantity: form.quantity, category: form.category, amount: Number(form.amount), vendor: form.vendor, note: form.note };
-    const saved = await insertRow("construction", row);
-    if (saved) setConstruction([saved, ...construction]);
-    setForm(blank); setShowForm(false);
+    if (editingId) {
+      if (await updateRow("construction", editingId, row)) {
+        setConstruction(construction.map((c) => c.id === editingId ? { ...c, ...row } : c));
+      }
+    } else {
+      const saved = await insertRow("construction", row);
+      if (saved) setConstruction([saved, ...construction]);
+    }
+    setForm(blankForm()); setEditingId(null); setShowForm(false);
   };
   const remove = async (id) => {
     if (await deleteRow("construction", id)) setConstruction(construction.filter((c) => c.id !== id));
@@ -810,7 +880,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
 
   return (
     <div>
-      <SectionHeader title="Construction costs" onAdd={() => setShowForm(true)} onExport={() => exportCSV("construction.csv", construction)} />
+      <SectionHeader title="Construction costs" onAdd={openAdd} onExport={() => exportCSV("construction.csv", construction)} />
 
       <div style={{ ...card, padding: 16, background: "#eef3f7", border: "1px solid #cdddea" }}>
         <div style={{ fontSize: 12, color: "#5a6e82", fontWeight: 600 }}>Total project cost so far</div>
@@ -859,7 +929,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
       {filtered.length === 0 ? <Empty icon={Hammer} text="No construction costs yet. Tap Add to record one." /> :
         filtered.map((c) => (
           <div key={c.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
+            <div onClick={() => openEdit(c)} style={{ cursor: "pointer", flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{c.item}{c.quantity ? <span style={{ fontWeight: 500, color: "#8a93a8" }}> × {c.quantity}</span> : null} <span style={{ fontWeight: 800, color: "#1c5fa8", marginLeft: 6 }}>{fmt(c.amount)}</span></div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{c.date} · {c.category}{c.vendor ? ` · ${c.vendor}` : ""}{c.note ? ` · ${c.note}` : ""}</div>
             </div>
@@ -868,7 +938,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
         ))}
 
       {showForm && (
-        <Modal title="Add construction cost" onClose={() => setShowForm(false)}>
+        <Modal title={editingId ? "Edit construction cost" : "Add construction cost"} onClose={() => { setShowForm(false); setEditingId(null); }}>
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
           <Field label="Category">
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
@@ -885,7 +955,7 @@ function Construction({ construction, setConstruction, categories = CONSTRUCTION
           <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
           <Field label="Vendor / supplier (optional)"><input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="e.g. Khan Hardware" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, background: "#1c5fa8" }}>Save cost</button>
+          <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, background: "#1c5fa8" }}>{editingId ? "Update cost" : "Save cost"}</button>
         </Modal>
       )}
     </div>
@@ -920,22 +990,57 @@ function ageFromDob(dob) {
 
 function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = ANIMAL_TYPES, statuses = ANIMAL_STATUSES }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [selected, setSelected] = useState(null);
-  const blank = { tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", note: "" };
-  const [form, setForm] = useState(blank);
+  const blankForm = () => ({ tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", note: "" });
+  const [form, setForm] = useState(blankForm());
 
-  const add = async () => {
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (a) => {
+    setEditingId(a.id);
+    setForm({ tag: a.tag || "", type: a.type || types[0], breed: a.breed || "", dob: a.dob || "", status: a.status || statuses[0], note: a.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
     if (!form.tag) return;
     const row = { tag: form.tag, type: form.type, breed: form.breed, dob: form.dob || null, status: form.status, note: form.note };
-    const saved = await insertRow("animals", row);
-    if (saved) setAnimals([saved, ...animals]);
-    setForm(blank); setShowForm(false);
+    if (editingId) {
+      if (await updateRow("animals", editingId, row)) {
+        setAnimals(animals.map((a) => a.id === editingId ? { ...a, ...row } : a));
+        if (selected && selected.id === editingId) setSelected({ ...selected, ...row });
+      }
+    } else {
+      const saved = await insertRow("animals", row);
+      if (saved) setAnimals([saved, ...animals]);
+    }
+    setForm(blankForm()); setEditingId(null); setShowForm(false);
   };
   const remove = async (id) => {
     if (await deleteRow("animals", id)) { setAnimals(animals.filter((a) => a.id !== id)); setSelected(null); }
   };
+
+  const animalFormModal = (
+    <Modal title={editingId ? "Edit animal" : "Register animal"} onClose={() => { setShowForm(false); setEditingId(null); }}>
+      <Field label="Tag ID / name"><input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="e.g. Cow #12" style={inputStyle} /></Field>
+      <Field label="Type">
+        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
+          {types.map((t) => <option key={t}>{t}</option>)}
+        </select>
+      </Field>
+      <Field label="Breed (optional)"><input value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} placeholder="e.g. Sahiwal" style={inputStyle} /></Field>
+      <Field label="Date of birth (optional)"><input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Status">
+        <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
+          {statuses.map((s) => <option key={s}>{s}</option>)}
+        </select>
+      </Field>
+      <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
+      <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update animal" : "Save animal"}</button>
+    </Modal>
+  );
 
   const filtered = animals.filter((a) =>
     (filterType === "All" || a.type === filterType) &&
@@ -987,9 +1092,13 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
             myMilk.slice(0, 10).map((m) => <div key={m.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{m.date} · {m.session} · {fmt(m.litres)} L</div>)}
         </div>
 
-        <button onClick={() => remove(a.id)} style={{ ...delBtn, width: "100%", padding: "12px", display: "flex", justifyContent: "center", gap: 8, alignItems: "center", marginTop: 6 }}>
+        <button onClick={() => openEdit(a)} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, marginBottom: 10 }}>
+          Edit this animal
+        </button>
+        <button onClick={() => remove(a.id)} style={{ ...delBtn, width: "100%", padding: "12px", display: "flex", justifyContent: "center", gap: 8, alignItems: "center" }}>
           <Trash2 size={18} /> Remove this animal
         </button>
+        {showForm && animalFormModal}
       </div>
     );
   }
@@ -997,7 +1106,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
   // list view
   return (
     <div>
-      <SectionHeader title="Animals" onAdd={() => setShowForm(true)} onExport={() => exportCSV("animals.csv", animals)} />
+      <SectionHeader title="Animals" onAdd={openAdd} onExport={() => exportCSV("animals.csv", animals)} />
       <div style={{ position: "relative", marginBottom: 10 }}>
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tag or breed" style={{ ...inputStyle, paddingLeft: 36 }} />
@@ -1024,25 +1133,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
           </div>
         ))}
 
-      {showForm && (
-        <Modal title="Register animal" onClose={() => setShowForm(false)}>
-          <Field label="Tag ID / name"><input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="e.g. Cow #12" style={inputStyle} /></Field>
-          <Field label="Type">
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
-              {types.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </Field>
-          <Field label="Breed (optional)"><input value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} placeholder="e.g. Sahiwal" style={inputStyle} /></Field>
-          <Field label="Date of birth (optional)"><input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} /></Field>
-          <Field label="Status">
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
-              {statuses.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
-          <button onClick={add} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Save animal</button>
-        </Modal>
-      )}
+      {showForm && animalFormModal}
     </div>
   );
 }
