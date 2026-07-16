@@ -62,7 +62,7 @@ export default function FarmManager() {
   if (!session) {
     return <Login />;
   }
-  return <FarmApp onSignOut={() => supabase.auth.signOut()} />;
+  return <FarmApp session={session} onSignOut={() => supabase.auth.signOut()} />;
 }
 
 function CenterMsg({ children }) {
@@ -110,9 +110,15 @@ function Login() {
   );
 }
 
-function FarmApp({ onSignOut }) {
+function FarmApp({ session, onSignOut }) {
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    supabase.from("profiles").select("role, full_name").eq("id", session.user.id).single()
+      .then(({ data }) => setProfile(data));
+  }, [session.user.id]);
 
   const [expenses, setExpenses] = useState([]);
   const [medicines, setMedicines] = useState([]);
@@ -168,7 +174,10 @@ function FarmApp({ onSignOut }) {
       <header style={{ background: "#1e3a5f", color: "white", padding: "12px 16px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "3px solid #e8b923" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img src="/logo.jpeg" alt="logo" style={{ height: 38, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
-          <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Farm Manager</h1>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Farm Manager</h1>
+            {profile && <div style={{ fontSize: 11, color: "#e8b923", fontWeight: 600, marginTop: 1 }}>{profile.role}</div>}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 14 }}>
           <button onClick={() => setTab("settings")} title="Settings" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><SettingsIcon size={19} /></button>
