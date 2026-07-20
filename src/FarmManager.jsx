@@ -195,7 +195,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk }} />}
-        {tab === "settings" && <SettingsScreen {...{ cats, setCats }} />}
+        {tab === "settings" && <SettingsScreen {...{ cats, setCats }} profile={profile} userEmail={session.user.email} />}
       </main>
 
       <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
@@ -1148,7 +1148,8 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
 }
 
 // ---------- settings: manage categories ----------
-function SettingsScreen({ cats, setCats }) {
+function SettingsScreen({ cats, setCats, profile, userEmail }) {
+  const role = profile?.role || "accountant";
   const groups = [
     { kind: "expense", title: "Expense categories" },
     { kind: "construction", title: "Construction categories" },
@@ -1156,6 +1157,19 @@ function SettingsScreen({ cats, setCats }) {
     { kind: "animal_status", title: "Animal statuses" },
   ];
   const [adding, setAdding] = useState({});
+  const [profiles, setProfiles] = useState([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+
+  useEffect(() => {
+    if (role !== "owner") return;
+    setLoadingProfiles(true);
+    fetchTable("profiles").then((rows) => { setProfiles(rows); setLoadingProfiles(false); });
+  }, [role]);
+
+  const changeRole = async (id, newRole) => {
+    if (await updateRow("profiles", id, { role: newRole }))
+      setProfiles(profiles.map((p) => p.id === id ? { ...p, role: newRole } : p));
+  };
 
   const addCat = async (kind) => {
     const value = (adding[kind] || "").trim();
@@ -1174,6 +1188,29 @@ function SettingsScreen({ cats, setCats }) {
   return (
     <div>
       <h2 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 700 }}>Settings</h2>
+      <div style={{ ...card, background: "#eef1f7", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "#5a6478" }}>Signed in as</div>
+        <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>{userEmail}</div>
+        <div style={{ fontSize: 12, color: "#c79a2e", fontWeight: 700, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{role}</div>
+      </div>
+
+      {role === "owner" && (
+        <div style={{ ...card, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>Users</div>
+          {loadingProfiles ? <div style={{ fontSize: 13, color: "#8a93a8" }}>Loading…</div> :
+            profiles.map((p) => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
+                <div style={{ fontSize: 14 }}>{p.email || p.id.slice(0, 8)}</div>
+                <select value={p.role} onChange={(e) => changeRole(p.id, e.target.value)}
+                  style={{ border: "1px solid #cdd6e6", borderRadius: 8, padding: "5px 8px", fontSize: 13, background: "white", color: "#1e3a5f", fontWeight: 600 }}>
+                  <option value="owner">owner</option>
+                  <option value="accountant">accountant</option>
+                </select>
+              </div>
+            ))}
+        </div>
+      )}
+
       <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8a93a8" }}>
         Add or remove your own categories. Changes are shared with everyone who logs in.
       </p>
