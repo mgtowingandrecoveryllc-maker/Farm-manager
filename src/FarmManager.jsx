@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
-  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint, Settings as SettingsIcon
+  TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint, Settings as SettingsIcon,
+  FileText, CheckCircle, XCircle, Clock, Camera
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -27,6 +28,31 @@ const updateRow = async (table, id, patch) => {
   if (error) { console.error(error); return false; }
   return true;
 };
+
+// ---------- Receipt upload helpers ----------
+async function compressImage(file, maxEdge = 1600, quality = 0.7) {
+  const img = await createImageBitmap(file);
+  const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+  return new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
+}
+
+async function uploadReceipt(file) {
+  const blob = await compressImage(file);
+  const path = `bills/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+  const { error } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+  if (error) { console.error(error); alert("Could not upload receipt. Try again."); return null; }
+  return path;
+}
+
+async function getSignedUrl(path) {
+  if (!path) return null;
+  const { data } = await supabase.storage.from("receipts").createSignedUrl(path, 3600);
+  return data?.signedUrl || null;
+}
 
 // ---------- CSV export ----------
 const exportCSV = (filename, rows) => {
@@ -128,16 +154,18 @@ function FarmApp({ session, onSignOut }) {
   const [animals, setAnimals] = useState([]);
   const [cats, setCats] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [bills, setBills] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
       fetchTable("categories"), fetchTable("vendors"),
+      fetchTable("bills"),
     ]);
-    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd);
+    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl);
     setLoading(false);
   };
 
@@ -159,14 +187,13 @@ function FarmApp({ session, onSignOut }) {
     return <CenterMsg>Loading your farm records…</CenterMsg>;
   }
 
+  const submittedCount = bills.filter((b) => b.status === "submitted").length;
   const tabs = [
     { id: "dashboard", label: "Home", icon: Home },
     { id: "expenses", label: "Expenses", icon: Wallet },
-    { id: "medicines", label: "Medicines", icon: Pill },
-    { id: "vaccinations", label: "Vaccines", icon: Syringe },
-    { id: "animals", label: "Animals", icon: PawPrint },
-    { id: "milk", label: "Milk", icon: Milk },
+    { id: "bills", label: "Bills", icon: FileText, badge: profile?.role === "owner" && submittedCount > 0 ? submittedCount : 0 },
     { id: "construction", label: "Build", icon: Hammer },
+    { id: "animals", label: "Animals", icon: PawPrint },
     { id: "reports", label: "Reports", icon: TrendingUp },
   ];
 
@@ -195,6 +222,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
+        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -210,7 +238,12 @@ function FarmApp({ session, onSignOut }) {
               alignItems: "center", gap: 3, cursor: "pointer", fontSize: 10, fontWeight: active ? 700 : 500,
               minWidth: 0, borderTop: active ? "3px solid #e8b923" : "3px solid transparent", marginTop: -1,
             }}>
-              <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
+              <div style={{ position: "relative" }}>
+                <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
+                {t.badge > 0 && (
+                  <span style={{ position: "absolute", top: -5, right: -7, background: "#c0392b", color: "white", borderRadius: "50%", width: 16, height: 16, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
+                )}
+              </div>
               {t.label}
             </button>
           );
@@ -1303,6 +1336,258 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
       <p style={{ fontSize: 12, color: "#8a93a8", marginTop: 4 }}>
         Note: removing a category doesn't change records you already saved with it — it only stops it appearing in the dropdowns.
       </p>
+    </div>
+  );
+}
+
+// ---------- bills ----------
+const statusColor = { submitted: "#c79a2e", approved: "#27ae60", rejected: "#c0392b", paid: "#1e3a5f" };
+const statusBg = { submitted: "#fff8e6", approved: "#eafaf1", rejected: "#fbeaea", paid: "#eef1f7" };
+
+function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats }) {
+  const role = profile?.role || "accountant";
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterScope, setFilterScope] = useState("All");
+  const [filterMonth, setFilterMonth] = useState("All");
+  const [showForm, setShowForm] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showReject, setShowReject] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const blankForm = () => ({
+    bill_no: "", bill_date: todayStr(), vendor_id: "", vendor_name: "",
+    scope: "farm", category: expenseCats[0] || "Other", item: "", quantity: "",
+    amount: "", note: "", receipt_file: null,
+  });
+  const [form, setForm] = useState(blankForm());
+  const [editingId, setEditingId] = useState(null);
+
+  const cats = form.scope === "farm" ? expenseCats : constructionCats;
+
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (b) => {
+    setEditingId(b.id);
+    setForm({ bill_no: b.bill_no || "", bill_date: b.bill_date || todayStr(), vendor_id: b.vendor_id || "", vendor_name: b.vendor_name || "", scope: b.scope || "farm", category: b.category || expenseCats[0], item: b.item || "", quantity: b.quantity || "", amount: String(b.amount || ""), note: b.note || "", receipt_file: null });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.amount || !form.bill_date) return;
+    setUploading(true);
+    let receipt_path = editingId ? (bills.find((b) => b.id === editingId)?.receipt_path || null) : null;
+    if (form.receipt_file) {
+      const p = await uploadReceipt(form.receipt_file);
+      if (p) receipt_path = p;
+    }
+    const row = {
+      bill_no: form.bill_no, bill_date: form.bill_date,
+      vendor_id: form.vendor_id || null, vendor_name: form.vendor_name || null,
+      scope: form.scope, category: form.category, item: form.item,
+      quantity: form.quantity, amount: Number(form.amount), note: form.note,
+      receipt_path,
+    };
+    if (editingId) {
+      const resubmit = bills.find((b) => b.id === editingId)?.status === "rejected";
+      const patch = { ...row, ...(resubmit ? { status: "submitted", rejected_reason: null } : {}) };
+      if (await updateRow("bills", editingId, patch))
+        setBills(bills.map((b) => b.id === editingId ? { ...b, ...patch } : b));
+    } else {
+      const saved = await insertRow("bills", { ...row, submitted_by: session.user.id, status: "submitted" });
+      if (saved) setBills([saved, ...bills]);
+    }
+    setUploading(false); setShowForm(false); setEditingId(null);
+    if (selected) setSelected(null);
+  };
+
+  const approve = async (b) => {
+    const patch = { status: "approved" };
+    if (await updateRow("bills", b.id, patch))
+      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    setSelected(null);
+  };
+
+  const reject = async (b) => {
+    if (!rejectReason.trim()) { alert("Please enter a reason."); return; }
+    const patch = { status: "rejected", rejected_reason: rejectReason };
+    if (await updateRow("bills", b.id, patch))
+      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    setShowReject(false); setRejectReason(""); setSelected(null);
+  };
+
+  const remove = async (id) => {
+    if (await deleteRow("bills", id)) { setBills(bills.filter((b) => b.id !== id)); setSelected(null); }
+  };
+
+  const months = monthsFrom(bills.map((b) => ({ date: b.bill_date })));
+  const filtered = bills.filter((b) =>
+    (filterStatus === "All" || b.status === filterStatus) &&
+    (filterScope === "All" || b.scope === filterScope) &&
+    (filterMonth === "All" || (b.bill_date || "").startsWith(filterMonth))
+  );
+
+  // Bill detail view
+  if (selected) {
+    const b = bills.find((x) => x.id === selected.id) || selected;
+    const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "—";
+    const canEdit = role === "owner" || (b.submitted_by === session.user.id && b.status === "submitted") || (b.submitted_by === session.user.id && b.status === "rejected");
+    const canApprove = role === "owner" && b.status === "submitted";
+
+    return (
+      <div>
+        <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#1e3a5f", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← All bills</button>
+        <div style={card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{vendorLabel}</div>
+              <div style={{ fontSize: 13, color: "#8a93a8", marginTop: 2 }}>{b.bill_date}{b.bill_no ? ` · #${b.bill_no}` : ""}</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: statusColor[b.status], background: statusBg[b.status], padding: "4px 10px", borderRadius: 8, textTransform: "uppercase" }}>{b.status}</span>
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#c0392b", marginBottom: 10 }}>{fmt(b.amount)}</div>
+          {[["Scope", b.scope], ["Category", b.category], ["Item", b.item], ["Quantity", b.quantity], ["Note", b.note]].map(([l, v]) => v ? (
+            <div key={l} style={{ fontSize: 13, color: "#5a6478", marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{l}:</span> {v}</div>
+          ) : null)}
+          {b.rejected_reason && <div style={{ marginTop: 8, padding: "8px 12px", background: "#fbeaea", borderRadius: 8, fontSize: 13, color: "#c0392b" }}><strong>Rejected:</strong> {b.rejected_reason}</div>}
+        </div>
+
+        <ReceiptViewer path={b.receipt_path} />
+
+        {canApprove && !showReject && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            <button onClick={() => approve(b)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60" }}><CheckCircle size={17} /> Approve</button>
+            <button onClick={() => setShowReject(true)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#c0392b" }}><XCircle size={17} /> Reject</button>
+          </div>
+        )}
+        {showReject && (
+          <div style={{ ...card, marginBottom: 14 }}>
+            <Field label="Reason for rejection">
+              <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Required" style={inputStyle} />
+            </Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => reject(b)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#c0392b" }}>Confirm reject</button>
+              <button onClick={() => setShowReject(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {canEdit && <button onClick={() => openEdit(b)} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginBottom: 10 }}>Edit / Resubmit</button>}
+        {role === "owner" && <button onClick={() => remove(b.id)} style={{ ...delBtn, width: "100%", padding: 12, display: "flex", justifyContent: "center", gap: 8 }}><Trash2 size={18} /> Delete bill</button>}
+
+        {showForm && (
+          <BillForm form={form} setForm={setForm} cats={cats} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Bills" onAdd={openAdd} onExport={() => exportCSV("bills.csv", bills)} />
+
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
+        {["All", "submitted", "approved", "rejected"].map((s) => (
+          <button key={s} onClick={() => setFilterStatus(s)} style={{
+            whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+            background: filterStatus === s ? "#1e3a5f" : "white", color: filterStatus === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterStatus === s ? 700 : 500, textTransform: "capitalize",
+          }}>{s}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {["All", "farm", "construction"].map((s) => (
+          <button key={s} onClick={() => setFilterScope(s)} style={{
+            whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+            background: filterScope === s ? "#c79a2e" : "white", color: filterScope === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterScope === s ? 700 : 500, textTransform: "capitalize",
+          }}>{s}</button>
+        ))}
+      </div>
+
+      <MonthFilter months={months} value={filterMonth} onChange={setFilterMonth} />
+
+      {filtered.length === 0 ? <Empty icon={FileText} text="No bills yet. Tap Add to create one." /> :
+        filtered.map((b) => {
+          const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "Unknown vendor";
+          return (
+            <div key={b.id} onClick={() => setSelected(b)} style={{ ...card, padding: "12px 14px", marginBottom: 10, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{vendorLabel}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor[b.status], background: statusBg[b.status], padding: "2px 7px", borderRadius: 6, textTransform: "uppercase" }}>{b.status}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#8a93a8" }}>{b.bill_date} · {b.category}{b.bill_no ? ` · #${b.bill_no}` : ""}</div>
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b", marginLeft: 10 }}>{fmt(b.amount)}</div>
+            </div>
+          );
+        })}
+
+      {showForm && (
+        <BillForm form={form} setForm={setForm} cats={cats} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} />
+      )}
+    </div>
+  );
+}
+
+function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClose, expenseCats, constructionCats }) {
+  const cats = form.scope === "farm" ? expenseCats : constructionCats;
+  return (
+    <Modal title={editingId ? "Edit bill" : "Add bill"} onClose={onClose}>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><Field label="Date"><input type="date" value={form.bill_date} onChange={(e) => setForm({ ...form, bill_date: e.target.value })} style={inputStyle} /></Field></div>
+        <div style={{ flex: 1 }}><Field label="Bill #"><input value={form.bill_no} onChange={(e) => setForm({ ...form, bill_no: e.target.value })} placeholder="optional" style={inputStyle} /></Field></div>
+      </div>
+      <Field label="Vendor">
+        <select value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value, vendor_name: "" })} style={inputStyle}>
+          <option value="">— select vendor —</option>
+          {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          <option value="__other__">Other (type below)</option>
+        </select>
+        {form.vendor_id === "__other__" && (
+          <input value={form.vendor_name} onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} placeholder="Vendor name" style={{ ...inputStyle, marginTop: 6 }} />
+        )}
+      </Field>
+      <Field label="Scope">
+        <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value, category: e.target.value === "farm" ? expenseCats[0] : constructionCats[0] })} style={inputStyle}>
+          <option value="farm">Farm</option>
+          <option value="construction">Construction</option>
+        </select>
+      </Field>
+      <Field label="Category">
+        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+          {cats.map((c) => <option key={c}>{c}</option>)}
+        </select>
+      </Field>
+      <Field label="Item (optional)"><input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement Bag" style={inputStyle} /></Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><Field label="Quantity"><input value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="e.g. 20 bags" style={inputStyle} /></Field></div>
+        <div style={{ flex: 1 }}><Field label="Amount *"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field></div>
+      </div>
+      <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Receipt photo">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.receipt_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+          <Camera size={18} />
+          {form.receipt_file ? form.receipt_file.name : "Take photo or choose file"}
+          <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setForm({ ...form, receipt_file: e.target.files[0] || null })} />
+        </label>
+      </Field>
+      <button onClick={onSave} disabled={uploading} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, opacity: uploading ? 0.6 : 1 }}>
+        {uploading ? "Uploading…" : editingId ? "Update bill" : "Submit bill"}
+      </button>
+    </Modal>
+  );
+}
+
+function ReceiptViewer({ path }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!path) return;
+    getSignedUrl(path).then(setUrl);
+  }, [path]);
+  if (!path) return null;
+  if (!url) return <div style={{ ...card, textAlign: "center", color: "#8a93a8", fontSize: 13 }}>Loading receipt…</div>;
+  return (
+    <div style={{ ...card, padding: 8, marginBottom: 14 }}>
+      <img src={url} alt="Receipt" style={{ width: "100%", borderRadius: 8, display: "block" }} />
     </div>
   );
 }
