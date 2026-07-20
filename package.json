@@ -1,21 +1,285 @@
-{
-  "name": "farm-manager",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
-    "lucide-react": "^0.383.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.3.1"
+# Farm Manager — Phase 2 Spec: Vendors, Receipt Storage, Bills + Lifecycle
+
+Second phase of the accounting system. Builds on Phase 1.
+
+**Prerequisite — do NOT start until Phase 1 is verified working:**
+- App reads/writes `categories`; entries visible on production.
+- `profiles` table exists; `owner` and `accountant` logins work.
+- `current_role_is(text)` helper function exists (from Phase 1 B3).
+- Clean build deployed.
+
+If any of those are missing, stop and finish Phase 1 first.
+
+Scope of THIS phase: vendors, receipt photo storage, and the bills table with
+its submit → approve/reject lifecycle. **Not** in this phase: auto-posting
+approved bills to the ledger (Phase 3), payments/vendor ledger (Phase 4).
+
+App entry component: `src/FarmManager.jsx`. Supabase client:
+`src/supabaseClient.js`. Deploys from GitHub `main` via Vercel.
+
+---
+
+## Part A — Vendors
+
+A proper ledger needs vendors as records, not free text.
+
+### A1. Table
+```sql
+create table if not exists vendors (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  phone text,
+  address text,
+  note text,
+  created_at timestamptz default now()
+);
+alter table vendors enable row level security;
+
+create policy "read vendors" on vendors
+  for select to authenticated using (true);
+
+create policy "owner manages vendors" on vendors
+  for all to authenticated
+  using (current_role_is('owner')) with check (current_role_is('owner'));
+
+notify pgrst, 'reload schema';
+```
+
+### A2. Seed from existing construction vendors
+```sql
+insert into vendors (name)
+select distinct trim(vendor) from construction
+where vendor is not null and trim(vendor) <> ''
+on conflict (name) do nothing;
+```
+
+### A3. UI
+- In Settings (owner only): a **Vendors** section — list vendors, add new
+  (name required; phone/address/note optional), edit, delete.
+- Accountants can read vendors (for the bill dropdown) but not manage them.
+- Reuse `<Modal>`, `<Field>`, `<SectionHeader>`, `<Empty>`.
+
+### A4. Verify
+Owner sees Vendors management; accountant does not. Seeded names appear.
+Build clean, deployed.
+
+---
+
+## Part B — Receipt photo storage (Supabase Storage)
+
+### B1. Create the bucket
+Owner, in Supabase dashboard → Storage → New bucket:
+- Name: `receipts`
+- **Private** (not public).
+
+### B2. Bucket policies
+In SQL editor (storage policies live in `storage.objects`):
+```sql
+-- any signed-in user can upload to the receipts bucket
+create policy "auth upload receipts" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'receipts');
+
+-- any signed-in user can read receipts
+create policy "auth read receipts" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'receipts');
+
+-- only owner can delete
+create policy "owner delete receipts" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'receipts' and current_role_is('owner'));
+```
+
+### B3. Client upload helper (in FarmManager.jsx)
+- Accept image files with camera capture:
+  `<input type="file" accept="image/*" capture="environment">`.
+- **Compress before upload** (receipts from phones are 3–5 MB; target < 1 MB).
+  Use a canvas resize (max ~1600px long edge, JPEG quality ~0.7). No external
+  library needed:
+  ```js
+  async function compressImage(file, maxEdge = 1600, quality = 0.7) {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    return await new Promise(res =>
+      canvas.toBlob(res, 'image/jpeg', quality));
   }
-}
+  ```
+- Upload to a unique path and store that path (not a URL) on the bill:
+  ```js
+  const path = `bills/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+  const { error } = await supabase.storage.from('receipts')
+    .upload(path, blob, { contentType: 'image/jpeg' });
+  // save `path` to bill.receipt_path
+  ```
+- Display via a signed URL (bucket is private):
+  ```js
+  const { data } = await supabase.storage.from('receipts')
+    .createSignedUrl(bill.receipt_path, 3600);
+  // data.signedUrl -> <img src>
+  ```
+
+### B4. Verify
+Upload one photo end to end: pick/capture → compresses → uploads → shows via
+signed URL. Confirm a 4 MB photo lands under ~1 MB in the bucket.
+
+---
+
+## Part C — Bills table + lifecycle
+
+### C1. Table
+```sql
+create table if not exists bills (
+  id bigint generated always as identity primary key,
+  bill_no text,
+  bill_date date not null,
+  vendor_id bigint references vendors(id),
+  vendor_name text,                -- fallback / free text
+  scope text not null check (scope in ('farm','construction')),
+  category text not null,
+  item text,
+  quantity text,
+  amount numeric not null default 0,
+  receipt_path text,
+  status text not null default 'submitted'
+    check (status in ('submitted','approved','rejected','paid')),
+  note text,
+  submitted_by uuid references auth.users(id),
+  submitted_at timestamptz default now(),
+  approved_by uuid references auth.users(id),
+  approved_at timestamptz,
+  rejected_reason text,
+  created_at timestamptz default now()
+);
+alter table bills enable row level security;
+```
+(Payment columns and ledger-posting columns come in later phases — leave them
+out for now to keep this phase focused.)
+
+### C2. Policies
+```sql
+create policy "read bills" on bills
+  for select to authenticated using (true);
+
+create policy "insert bills" on bills
+  for insert to authenticated with check (true);
+
+-- accountant may edit only own bills while still 'submitted'; owner any
+create policy "update bills" on bills
+  for update to authenticated
+  using (current_role_is('owner')
+         or (submitted_by = auth.uid() and status = 'submitted'))
+  with check (current_role_is('owner')
+              or (submitted_by = auth.uid() and status = 'submitted'));
+
+create policy "owner deletes bills" on bills
+  for delete to authenticated using (current_role_is('owner'));
+```
+
+### C3. Approval trigger (owner-only, enforced in DB)
+```sql
+create or replace function enforce_bill_transitions()
+returns trigger language plpgsql security definer as $$
+begin
+  if new.status is distinct from old.status then
+    if new.status in ('approved','rejected')
+       and not current_role_is('owner') then
+      raise exception 'Only the owner can approve or reject bills';
+    end if;
+    if new.status = 'approved' then
+      new.approved_by := auth.uid();
+      new.approved_at := now();
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists bills_transition on bills;
+create trigger bills_transition
+  before update on bills
+  for each row execute function enforce_bill_transitions();
+
+notify pgrst, 'reload schema';
+```
+Set `submitted_by` to `auth.uid()` on insert from the client.
+
+### C4. Lifecycle (this phase)
+```
+[accountant enters bill + photo] -> submitted
+        owner approves           -> approved
+        owner rejects (+reason)  -> rejected
+        accountant fixes rejected, resubmits -> submitted
+```
+(`paid` status and payments are Phase 4. `approved` bills do NOT yet post to
+the expense ledger — that's Phase 3.)
+
+### C5. UI — Bills tab
+Bottom nav is already crowded (8 items). Make room: move `Medicines` and
+`Vaccines` into a small "More"/animals grouping, OR replace a low-use tab, so
+visible nav stays <= 6. Add a **Bills** tab.
+
+**Bills list**
+- Status filter chips: All / Submitted / Approved / Rejected.
+- Scope filter: Farm / Construction.
+- Month filter: reuse existing `<MonthFilter>` + `monthsFrom()` on `bill_date`.
+- Row: vendor, amount, bill_date, status badge, receipt thumbnail.
+- If `role === 'owner'`: show a count badge of `submitted` bills ("needs
+  approval") on the tab.
+
+**Entry form (both roles can create)**
+- bill_date, vendor (dropdown from `vendors` + "add new" inline for owner),
+  bill_no, scope (Farm/Construction), category (reuse `EXPENSE_CATEGORIES` /
+  `CONSTRUCTION_CATEGORIES` and the `CONSTRUCTION_ITEMS` suggestion map),
+  item, quantity, amount, note.
+- Receipt photo capture (Part B).
+- Save → `submitted`, `submitted_by = auth.uid()`.
+
+**Bill detail**
+- Show all fields + full receipt image (signed URL).
+- If `owner` and status `submitted`: **Approve** and **Reject** buttons.
+  Reject opens a required-reason input → sets `rejected`, stores reason.
+- If accountant and status `rejected`: allow edit + resubmit (→ `submitted`,
+  clears `rejected_reason`).
+- Status badge colors: submitted = grey/amber, approved = green,
+  rejected = red.
+
+### C6. Verify
+- Accountant creates a bill with photo → appears as `submitted`.
+- Owner sees approval badge, opens it, sees the photo, approves → `approved`.
+- Accountant tries to approve (via UI absence AND direct attempt) → blocked by
+  the trigger.
+- Owner rejects another with a reason → accountant sees reason, edits,
+  resubmits.
+- Build clean, deployed.
+
+---
+
+## Constraints
+- Reuse existing helpers: `fetchTable`, `insertRow`, `updateRow`, `deleteRow`,
+  `exportCSV`, `fmt`, `todayStr`, `monthsFrom`, `monthLabel`, `<MonthFilter>`,
+  `<Modal>`, `<Field>`, `<SectionHeader>`, `<Empty>`.
+- Navy/gold theme: `#1e3a5f`, gold `#e8b923`/`#c79a2e`, bg `#f4f6fa`,
+  construction blue `#1c5fa8`, expense red `#c0392b`.
+- snake_case columns; every table RLS-enabled with a policy.
+- After schema changes: `notify pgrst, 'reload schema';` (full project restart
+  if the cache misbehaves).
+- Mobile-first (~380px). Test photo capture on an actual phone.
+- One numbered step at a time; provide SQL for the owner to run; wait for
+  confirmation before proceeding; `npm install && npm run build` clean before
+  each commit.
+
+## Done when
+- Vendors managed by owner, readable by accountant.
+- `receipts` bucket works: compressed upload + signed-URL display.
+- Bills can be created with a photo, approved/rejected by owner only (DB-
+  enforced), and rejected bills resubmitted.
+- Clean build on production.
+
+## Next (Phase 3)
+Auto-post approved bills into `expenses` / `construction` via a DB trigger, so
+the existing Reports stay correct automatically. Ask for Phase 3 once Phase 2
+is verified.
