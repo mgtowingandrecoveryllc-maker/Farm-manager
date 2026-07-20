@@ -1382,7 +1382,8 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     }
     const row = {
       bill_no: form.bill_no, bill_date: form.bill_date,
-      vendor_id: form.vendor_id || null, vendor_name: form.vendor_name || null,
+      vendor_id: (form.vendor_id && form.vendor_id !== "__other__") ? Number(form.vendor_id) : null,
+      vendor_name: form.vendor_name || null,
       scope: form.scope, category: form.category, item: form.item,
       quantity: form.quantity, amount: Number(form.amount), note: form.note,
       receipt_path,
