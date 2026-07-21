@@ -1502,7 +1502,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
             <Field label="Payment date"><input type="date" value={paidForm.paid_at} onChange={(e) => setPaidForm({ ...paidForm, paid_at: e.target.value })} style={inputStyle} /></Field>
             <Field label="Method">
               <select value={paidForm.paid_method} onChange={(e) => setPaidForm({ ...paidForm, paid_method: e.target.value })} style={inputStyle}>
-                {["Cash", "Bank", "Easypaisa", "Cheque"].map((m) => <option key={m}>{m}</option>)}
+                {["Cash", "Bank", "Easypaisa", "JazzCash", "Cheque"].map((m) => <option key={m}>{m}</option>)}
               </select>
             </Field>
             <Field label="Reference (optional)"><input value={paidForm.paid_reference} onChange={(e) => setPaidForm({ ...paidForm, paid_reference: e.target.value })} placeholder="Cheque no, txn ID…" style={inputStyle} /></Field>
