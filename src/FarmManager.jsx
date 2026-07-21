@@ -1656,3 +1656,79 @@ function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClos
 
 function ReceiptViewer({ path }) {
   const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!path) return;
+    getSignedUrl(path).then(setUrl);
+  }, [path]);
+  if (!path) return null;
+  if (!url) return <div style={{ ...card, textAlign: "center", color: "#8a93a8", fontSize: 13 }}>Loading receipt…</div>;
+  return (
+    <div style={{ ...card, padding: 8, marginBottom: 14 }}>
+      <img src={url} alt="Receipt" style={{ width: "100%", borderRadius: 8, display: "block" }} />
+    </div>
+  );
+}
+
+// ---------- reports: month-by-month totals ----------
+function Reports({ expenses, construction, milk }) {
+  const [scope, setScope] = useState("farm"); // farm | build
+
+  const rows = scope === "farm" ? expenses : construction;
+  const accent = scope === "farm" ? "#c0392b" : "#1c5fa8";
+  const months = monthsFrom(rows);
+
+  const monthTotals = months.map((m) => {
+    const inMonth = rows.filter((r) => (r.date || "").startsWith(m));
+    const total = inMonth.reduce((s, r) => s + Number(r.amount), 0);
+    const map = {};
+    inMonth.forEach((r) => { map[r.category] = (map[r.category] || 0) + Number(r.amount); });
+    const cats = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return { month: m, total, cats, count: inMonth.length };
+  });
+  const maxMonth = Math.max(...monthTotals.map((m) => m.total), 1);
+  const grand = rows.reduce((s, r) => s + Number(r.amount), 0);
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 12px", fontSize: 19, fontWeight: 700 }}>Reports</h2>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[["farm", "Farm expenses"], ["build", "Construction"]].map(([k, label]) => (
+          <button key={k} onClick={() => setScope(k)} style={{
+            flex: 1, border: "1px solid #cdd6e6", borderRadius: 10, padding: "10px 6px", fontSize: 14, fontWeight: 700, cursor: "pointer",
+            background: scope === k ? "#1e3a5f" : "white", color: scope === k ? "white" : "#3a4a3f",
+          }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ ...card, background: "#eef1f7" }}>
+        <div style={{ fontSize: 12, color: "#5a6e82", fontWeight: 600 }}>{scope === "farm" ? "Total farm expenses" : "Total construction cost"}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: accent, marginTop: 4 }}>{fmt(grand)}</div>
+        <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 2 }}>{rows.length} entries across {months.length} month{months.length === 1 ? "" : "s"}</div>
+      </div>
+
+      {monthTotals.length === 0 ? <Empty icon={TrendingUp} text="No records yet." /> :
+        monthTotals.map((m) => (
+          <div key={m.month} style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+              <span style={{ fontWeight: 800, fontSize: 16 }}>{monthLabel(m.month)}</span>
+              <span style={{ fontWeight: 800, fontSize: 17, color: accent }}>{fmt(m.total)}</span>
+            </div>
+            <div style={{ background: "#eef1f7", borderRadius: 6, height: 8, marginBottom: 10 }}>
+              <div style={{ width: `${(m.total / maxMonth) * 100}%`, background: accent, height: 8, borderRadius: 6 }} />
+            </div>
+            {m.cats.map(([cat, amt]) => (
+              <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0", borderBottom: "1px solid #f2f5f9" }}>
+                <span style={{ color: "#5a6478" }}>{cat}</span>
+                <span style={{ fontWeight: 600 }}>{fmt(amt)}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 8 }}>{m.count} entries</div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+const delBtn = { border: "none", background: "#fbeaea", color: "#c0392b", borderRadius: 8, padding: 8, cursor: "pointer", flexShrink: 0 };
+const stepBtn = { border: "1px solid #cdd6e6", background: "white", width: 38, height: 38, borderRadius: 10, fontSize: 22, fontWeight: 700, color: "#1e3a5f", cursor: "pointer", lineHeight: 1 };
