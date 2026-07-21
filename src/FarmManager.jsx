@@ -1341,8 +1341,8 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
 }
 
 // ---------- bills ----------
-const statusColor = { submitted: "#c79a2e", approved: "#27ae60", rejected: "#c0392b", paid: "#1e3a5f" };
-const statusBg = { submitted: "#fff8e6", approved: "#eafaf1", rejected: "#fbeaea", paid: "#eef1f7" };
+const statusColor = { submitted: "#c79a2e", approved: "#1c5fa8", rejected: "#c0392b", paid: "#27ae60" };
+const statusBg = { submitted: "#fff8e6", approved: "#eef3fb", rejected: "#fbeaea", paid: "#eafaf1" };
 
 function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats }) {
   const role = profile?.role || "accountant";
@@ -1353,6 +1353,8 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   const [selected, setSelected] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [showPaid, setShowPaid] = useState(false);
+  const [paidForm, setPaidForm] = useState({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "" });
   const [uploading, setUploading] = useState(false);
 
   const blankForm = () => ({
@@ -1416,6 +1418,21 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     setShowReject(false); setRejectReason(""); setSelected(null);
   };
 
+  const markPaid = async (b) => {
+    const patch = { status: "paid", paid_at: paidForm.paid_at || todayStr(), paid_method: paidForm.paid_method, paid_reference: paidForm.paid_reference };
+    if (await updateRow("bills", b.id, patch))
+      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    setShowPaid(false); setSelected(null);
+  };
+
+  const reversePaid = async (b) => {
+    if (!window.confirm("Reverse this payment? The posted ledger entry will be removed.")) return;
+    const patch = { status: "approved", paid_at: null, paid_method: null, paid_reference: null };
+    if (await updateRow("bills", b.id, patch))
+      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    setSelected(null);
+  };
+
   const remove = async (id) => {
     if (await deleteRow("bills", id)) { setBills(bills.filter((b) => b.id !== id)); setSelected(null); }
   };
@@ -1454,9 +1471,10 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
 
         <ReceiptViewer path={b.receipt_path} />
 
-        {canApprove && !showReject && (
+        {/* Approve / Reject */}
+        {canApprove && !showReject && !showPaid && (
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-            <button onClick={() => approve(b)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60" }}><CheckCircle size={17} /> Approve</button>
+            <button onClick={() => approve(b)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#1c5fa8" }}><CheckCircle size={17} /> Approve</button>
             <button onClick={() => setShowReject(true)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#c0392b" }}><XCircle size={17} /> Reject</button>
           </div>
         )}
@@ -1471,6 +1489,46 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
             </div>
           </div>
         )}
+
+        {/* Mark paid */}
+        {b.status === "approved" && !showReject && !showPaid && (
+          <button onClick={() => { setPaidForm({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "" }); setShowPaid(true); }} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginBottom: 10, background: "#27ae60" }}>
+            <CheckCircle size={17} /> Mark paid
+          </button>
+        )}
+        {showPaid && (
+          <div style={{ ...card, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Record payment</div>
+            <Field label="Payment date"><input type="date" value={paidForm.paid_at} onChange={(e) => setPaidForm({ ...paidForm, paid_at: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Method">
+              <select value={paidForm.paid_method} onChange={(e) => setPaidForm({ ...paidForm, paid_method: e.target.value })} style={inputStyle}>
+                {["Cash", "Bank", "Easypaisa", "Cheque"].map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </Field>
+            <Field label="Reference (optional)"><input value={paidForm.paid_reference} onChange={(e) => setPaidForm({ ...paidForm, paid_reference: e.target.value })} placeholder="Cheque no, txn ID…" style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => markPaid(b)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60" }}>Confirm payment</button>
+              <button onClick={() => setShowPaid(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Paid info */}
+        {b.status === "paid" && (
+          <div style={{ ...card, background: "#eafaf1", marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, color: "#27ae60", marginBottom: 6 }}>Payment recorded</div>
+            <div style={{ fontSize: 13 }}>Date: {b.paid_at} · Method: {b.paid_method}{b.paid_reference ? ` · Ref: ${b.paid_reference}` : ""}</div>
+            <div style={{ fontSize: 12, color: "#5a6e60", marginTop: 6 }}>
+              Posted to {b.scope === "farm" ? "Farm expenses" : "Construction"} for {monthLabel(b.bill_date?.slice(0, 7))}.
+            </div>
+            {role === "owner" && (
+              <button onClick={() => reversePaid(b)} style={{ marginTop: 10, border: "1px solid #c0392b", background: "white", color: "#c0392b", borderRadius: 8, padding: "6px 12px", fontSize: 13, cursor: "pointer" }}>
+                Reverse payment
+              </button>
+            )}
+          </div>
+        )}
+
         {canEdit && <button onClick={() => openEdit(b)} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginBottom: 10 }}>Edit / Resubmit</button>}
         {role === "owner" && <button onClick={() => remove(b.id)} style={{ ...delBtn, width: "100%", padding: 12, display: "flex", justifyContent: "center", gap: 8 }}><Trash2 size={18} /> Delete bill</button>}
 
@@ -1485,8 +1543,26 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     <div>
       <SectionHeader title="Bills" onAdd={openAdd} onExport={() => exportCSV("bills.csv", bills)} />
 
+      {(() => {
+        const thisMonth = todayStr().slice(0, 7);
+        const outstanding = bills.filter((b) => b.status === "approved").reduce((s, b) => s + Number(b.amount), 0);
+        const paidThisMonth = bills.filter((b) => b.status === "paid" && (b.paid_at || "").startsWith(thisMonth)).reduce((s, b) => s + Number(b.amount), 0);
+        return (
+          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+            <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+              <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Approved, unpaid</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1c5fa8" }}>{fmt(outstanding)}</div>
+            </div>
+            <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+              <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Paid this month</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#27ae60" }}>{fmt(paidThisMonth)}</div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
-        {["All", "submitted", "approved", "rejected"].map((s) => (
+        {["All", "submitted", "approved", "paid", "rejected"].map((s) => (
           <button key={s} onClick={() => setFilterStatus(s)} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterStatus === s ? "#1e3a5f" : "white", color: filterStatus === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterStatus === s ? 700 : 500, textTransform: "capitalize",
@@ -1580,79 +1656,3 @@ function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClos
 
 function ReceiptViewer({ path }) {
   const [url, setUrl] = useState(null);
-  useEffect(() => {
-    if (!path) return;
-    getSignedUrl(path).then(setUrl);
-  }, [path]);
-  if (!path) return null;
-  if (!url) return <div style={{ ...card, textAlign: "center", color: "#8a93a8", fontSize: 13 }}>Loading receipt…</div>;
-  return (
-    <div style={{ ...card, padding: 8, marginBottom: 14 }}>
-      <img src={url} alt="Receipt" style={{ width: "100%", borderRadius: 8, display: "block" }} />
-    </div>
-  );
-}
-
-// ---------- reports: month-by-month totals ----------
-function Reports({ expenses, construction, milk }) {
-  const [scope, setScope] = useState("farm"); // farm | build
-
-  const rows = scope === "farm" ? expenses : construction;
-  const accent = scope === "farm" ? "#c0392b" : "#1c5fa8";
-  const months = monthsFrom(rows);
-
-  const monthTotals = months.map((m) => {
-    const inMonth = rows.filter((r) => (r.date || "").startsWith(m));
-    const total = inMonth.reduce((s, r) => s + Number(r.amount), 0);
-    const map = {};
-    inMonth.forEach((r) => { map[r.category] = (map[r.category] || 0) + Number(r.amount); });
-    const cats = Object.entries(map).sort((a, b) => b[1] - a[1]);
-    return { month: m, total, cats, count: inMonth.length };
-  });
-  const maxMonth = Math.max(...monthTotals.map((m) => m.total), 1);
-  const grand = rows.reduce((s, r) => s + Number(r.amount), 0);
-
-  return (
-    <div>
-      <h2 style={{ margin: "0 0 12px", fontSize: 19, fontWeight: 700 }}>Reports</h2>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        {[["farm", "Farm expenses"], ["build", "Construction"]].map(([k, label]) => (
-          <button key={k} onClick={() => setScope(k)} style={{
-            flex: 1, border: "1px solid #cdd6e6", borderRadius: 10, padding: "10px 6px", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            background: scope === k ? "#1e3a5f" : "white", color: scope === k ? "white" : "#3a4a3f",
-          }}>{label}</button>
-        ))}
-      </div>
-
-      <div style={{ ...card, background: "#eef1f7" }}>
-        <div style={{ fontSize: 12, color: "#5a6e82", fontWeight: 600 }}>{scope === "farm" ? "Total farm expenses" : "Total construction cost"}</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: accent, marginTop: 4 }}>{fmt(grand)}</div>
-        <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 2 }}>{rows.length} entries across {months.length} month{months.length === 1 ? "" : "s"}</div>
-      </div>
-
-      {monthTotals.length === 0 ? <Empty icon={TrendingUp} text="No records yet." /> :
-        monthTotals.map((m) => (
-          <div key={m.month} style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-              <span style={{ fontWeight: 800, fontSize: 16 }}>{monthLabel(m.month)}</span>
-              <span style={{ fontWeight: 800, fontSize: 17, color: accent }}>{fmt(m.total)}</span>
-            </div>
-            <div style={{ background: "#eef1f7", borderRadius: 6, height: 8, marginBottom: 10 }}>
-              <div style={{ width: `${(m.total / maxMonth) * 100}%`, background: accent, height: 8, borderRadius: 6 }} />
-            </div>
-            {m.cats.map(([cat, amt]) => (
-              <div key={cat} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0", borderBottom: "1px solid #f2f5f9" }}>
-                <span style={{ color: "#5a6478" }}>{cat}</span>
-                <span style={{ fontWeight: 600 }}>{fmt(amt)}</span>
-              </div>
-            ))}
-            <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 8 }}>{m.count} entries</div>
-          </div>
-        ))}
-    </div>
-  );
-}
-
-const delBtn = { border: "none", background: "#fbeaea", color: "#c0392b", borderRadius: 8, padding: 8, cursor: "pointer", flexShrink: 0 };
-const stepBtn = { border: "1px solid #cdd6e6", background: "white", width: 38, height: 38, borderRadius: 10, fontSize: 22, fontWeight: 700, color: "#1e3a5f", cursor: "pointer", lineHeight: 1 };
