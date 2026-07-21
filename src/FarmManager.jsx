@@ -1340,6 +1340,24 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
   );
 }
 
+// ---------- WhatsApp unpaid summary ----------
+function buildUnpaidMessage(bills) {
+  const unpaid = bills.filter((b) => b.status === "approved").sort((a, b) => new Date(a.bill_date) - new Date(b.bill_date));
+  const today = new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  if (unpaid.length === 0) return `Farm Manager\nAs of ${today}\n\nNo bills awaiting payment. All settled.`;
+  const lines = unpaid.map((b, i) => {
+    const d = b.bill_date ? new Date(b.bill_date).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
+    const vendor = b.vendor_name || "Unknown vendor";
+    return `${i + 1}. ${vendor} — ${fmt(b.amount)} (${b.category}${d ? ", " + d : ""})`;
+  });
+  const total = unpaid.reduce((s, b) => s + Number(b.amount), 0);
+  return ["Farm Manager — Bills approved & awaiting payment", `As of ${today}`, "", ...lines, "", `Total to pay: ${fmt(total)}`, `${unpaid.length} bill${unpaid.length === 1 ? "" : "s"}`].join("\n");
+}
+function sendUnpaidToWhatsApp(bills) {
+  const url = `https://wa.me/?text=${encodeURIComponent(buildUnpaidMessage(bills))}`;
+  window.open(url, "_blank");
+}
+
 // ---------- bills ----------
 const statusColor = { submitted: "#c79a2e", approved: "#1c5fa8", rejected: "#c0392b", paid: "#27ae60" };
 const statusBg = { submitted: "#fff8e6", approved: "#eef3fb", rejected: "#fbeaea", paid: "#eafaf1" };
@@ -1542,6 +1560,17 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   return (
     <div>
       <SectionHeader title="Bills" onAdd={openAdd} onExport={() => exportCSV("bills.csv", bills)} />
+
+      {(() => {
+        const unpaidBills = bills.filter((b) => b.status === "approved");
+        const unpaidTotal = unpaidBills.reduce((s, b) => s + Number(b.amount), 0);
+        if (unpaidBills.length > 0) return (
+          <button onClick={() => sendUnpaidToWhatsApp(bills)} style={{ width: "100%", background: "#25D366", color: "white", border: "none", borderRadius: 12, padding: "12px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            💬 WhatsApp: {unpaidBills.length} bill{unpaidBills.length === 1 ? "" : "s"} · {fmt(unpaidTotal)} unpaid
+          </button>
+        );
+        return null;
+      })()}
 
       {(() => {
         const thisMonth = todayStr().slice(0, 7);
