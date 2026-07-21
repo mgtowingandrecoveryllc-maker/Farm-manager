@@ -1372,7 +1372,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [showPaid, setShowPaid] = useState(false);
-  const [paidForm, setPaidForm] = useState({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "" });
+  const [paidForm, setPaidForm] = useState({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "", proof_file: null });
   const [uploading, setUploading] = useState(false);
 
   const blankForm = () => ({
@@ -1422,32 +1422,43 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   };
 
   const approve = async (b) => {
-    const patch = { status: "approved" };
-    if (await updateRow("bills", b.id, patch))
-      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    const { error } = await supabase.from("bills").update({ status: "approved" }).eq("id", b.id);
+    if (error) { alert("Could not approve: " + error.message); return; }
+    setBills(bills.map((x) => x.id === b.id ? { ...x, status: "approved" } : x));
     setSelected(null);
   };
 
   const reject = async (b) => {
     if (!rejectReason.trim()) { alert("Please enter a reason."); return; }
-    const patch = { status: "rejected", rejected_reason: rejectReason };
-    if (await updateRow("bills", b.id, patch))
-      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    const { error } = await supabase.from("bills").update({ status: "rejected", rejected_reason: rejectReason }).eq("id", b.id);
+    if (error) { alert("Could not reject: " + error.message); return; }
+    setBills(bills.map((x) => x.id === b.id ? { ...x, status: "rejected", rejected_reason: rejectReason } : x));
     setShowReject(false); setRejectReason(""); setSelected(null);
   };
 
   const markPaid = async (b) => {
-    const patch = { status: "paid", paid_at: paidForm.paid_at || todayStr(), paid_method: paidForm.paid_method, paid_reference: paidForm.paid_reference };
-    if (await updateRow("bills", b.id, patch))
-      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
-    setShowPaid(false); setSelected(null);
+    setUploading(true);
+    let payment_proof_path = null;
+    if (paidForm.proof_file) {
+      const blob = await compressImage(paidForm.proof_file);
+      const path = `payments/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      const { error: upErr } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+      if (upErr) { alert("Could not upload proof photo: " + upErr.message); setUploading(false); return; }
+      payment_proof_path = path;
+    }
+    const patch = { status: "paid", paid_at: paidForm.paid_at || todayStr(), paid_method: paidForm.paid_method, paid_reference: paidForm.paid_reference, payment_proof_path };
+    const { error } = await supabase.from("bills").update(patch).eq("id", b.id);
+    if (error) { alert("Could not mark paid: " + error.message); setUploading(false); return; }
+    setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    setUploading(false); setShowPaid(false); setSelected(null);
   };
 
   const reversePaid = async (b) => {
     if (!window.confirm("Reverse this payment? The posted ledger entry will be removed.")) return;
     const patch = { status: "approved", paid_at: null, paid_method: null, paid_reference: null };
-    if (await updateRow("bills", b.id, patch))
-      setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    const { error } = await supabase.from("bills").update(patch).eq("id", b.id);
+    if (error) { alert("Could not reverse: " + error.message); return; }
+    setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
     setSelected(null);
   };
 
@@ -1487,7 +1498,18 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
           {b.rejected_reason && <div style={{ marginTop: 8, padding: "8px 12px", background: "#fbeaea", borderRadius: 8, fontSize: 13, color: "#c0392b" }}><strong>Rejected:</strong> {b.rejected_reason}</div>}
         </div>
 
-        <ReceiptViewer path={b.receipt_path} />
+        {b.receipt_path && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#5a6478", marginBottom: 4 }}>Receipt</div>
+            <ReceiptViewer path={b.receipt_path} />
+          </div>
+        )}
+        {b.status === "paid" && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#5a6478", marginBottom: 4 }}>Payment proof</div>
+            {b.payment_proof_path ? <ReceiptViewer path={b.payment_proof_path} /> : <div style={{ fontSize: 13, color: "#8a93a8", marginBottom: 10 }}>No payment proof attached.</div>}
+          </div>
+        )}
 
         {/* Approve / Reject */}
         {canApprove && !showReject && !showPaid && (
@@ -1524,8 +1546,15 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
               </select>
             </Field>
             <Field label="Reference (optional)"><input value={paidForm.paid_reference} onChange={(e) => setPaidForm({ ...paidForm, paid_reference: e.target.value })} placeholder="Cheque no, txn ID…" style={inputStyle} /></Field>
+            <Field label="Payment proof photo (optional)">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: paidForm.proof_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+                <Camera size={18} />
+                {paidForm.proof_file ? paidForm.proof_file.name : "Screenshot or photo of payment"}
+                <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setPaidForm({ ...paidForm, proof_file: e.target.files[0] || null })} />
+              </label>
+            </Field>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => markPaid(b)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60" }}>Confirm payment</button>
+              <button onClick={() => markPaid(b)} disabled={uploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60", opacity: uploading ? 0.6 : 1 }}>{uploading ? "Saving…" : "Confirm payment"}</button>
               <button onClick={() => setShowPaid(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
             </div>
           </div>
