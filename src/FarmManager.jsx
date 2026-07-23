@@ -121,11 +121,6 @@ function Login() {
     setBusy(true); setErr("");
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
     if (error) { setErr(error.message); setBusy(false); return; }
-    // Insert profile row with pending status
-    const userId = data.user?.id;
-    if (userId) {
-      await supabase.from("profiles").upsert({ id: userId, full_name: name.trim(), role: "accountant", status: "pending" });
-    }
     // Sign out immediately so they don't auto-login
     await supabase.auth.signOut();
     setBusy(false);
@@ -239,6 +234,19 @@ function FarmApp({ session, onSignOut }) {
     animal_type: catList("animal_type", ANIMAL_TYPES),
     animal_status: catList("animal_status", ANIMAL_STATUSES),
   };
+
+  if (profile === null && !loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)", textAlign: "center" }}>
+          <Clock size={48} color="#c79a2e" style={{ marginBottom: 16 }} />
+          <h2 style={{ margin: "0 0 10px", color: "#1e3a5f" }}>Awaiting Approval</h2>
+          <p style={{ color: "#5a6478", fontSize: 14, margin: "0 0 20px" }}>Your account is pending admin approval. Please wait or contact the farm owner.</p>
+          <button onClick={onSignOut} style={{ background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
 
   if (profile && profile.status === "pending") {
     return (
@@ -1317,12 +1325,20 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
 
   const rejectUser = async (id) => {
     if (!confirm("Reject and delete this user? This cannot be undone.")) return;
-    // Delete from auth via RPC, then mark rejected in profile as fallback
     const { error: rpcErr } = await supabase.rpc("delete_auth_user", { target_user_id: id });
     if (rpcErr) {
-      // Fallback: just mark rejected so they can't use the app
       await supabase.from("profiles").update({ status: "rejected" }).eq("id", id);
       setProfiles(profiles.map((p) => p.id === id ? { ...p, status: "rejected" } : p));
+    } else {
+      setProfiles(profiles.filter((p) => p.id !== id));
+    }
+  };
+
+  const deleteUser = async (id, name) => {
+    if (!confirm(`Remove ${name || "this user"}? They will lose all access immediately.`)) return;
+    const { error: rpcErr } = await supabase.rpc("delete_auth_user", { target_user_id: id });
+    if (rpcErr) {
+      alert("Could not delete user: " + rpcErr.message);
     } else {
       setProfiles(profiles.filter((p) => p.id !== id));
     }
@@ -1381,9 +1397,9 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
               <div style={{ fontWeight: 700, marginBottom: 12 }}>Users</div>
               {loadingProfiles ? <div style={{ fontSize: 13, color: "#8a93a8" }}>Loading…</div> :
                 active.map((p) => (
-                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
-                    <div>
-                      <div style={{ fontSize: 14 }}>{p.full_name || p.email || p.id.slice(0, 8)}</div>
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #eef1f7", gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{p.full_name || p.email || p.id.slice(0, 8)}</div>
                       {p.full_name && <div style={{ fontSize: 12, color: "#8a93a8" }}>{p.email || ""}</div>}
                     </div>
                     <select value={p.role} onChange={(e) => changeRole(p.id, e.target.value)}
@@ -1391,6 +1407,12 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
                       <option value="owner">owner</option>
                       <option value="accountant">accountant</option>
                     </select>
+                    {p.id !== profile?.id && (
+                      <button onClick={() => deleteUser(p.id, p.full_name || p.email)} title="Remove user"
+                        style={{ background: "#fbeaea", border: "1px solid #f0b8b8", color: "#c0392b", borderRadius: 8, padding: "5px 8px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 ))}
             </div>
