@@ -306,7 +306,7 @@ function FarmApp({ session, onSignOut }) {
       </header>
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-        {tab === "dashboard" && <Dashboard {...{ expenses, medicines, vaccinations, milk, setTab }} />}
+        {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, setTab }} />}
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
@@ -390,13 +390,52 @@ function Empty({ icon: Icon, text }) {
 }
 
 // ---------- dashboard ----------
-function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
-  const thisMonth = todayStr().slice(0, 7);
-  const monthExpense = expenses.filter((e) => e.date.startsWith(thisMonth)).reduce((s, e) => s + Number(e.amount), 0);
-  const totalExpense = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const todayMilk = milk.filter((m) => m.date === todayStr()).reduce((s, m) => s + Number(m.litres), 0);
+function Dashboard({ expenses, construction, medicines, vaccinations, milk, bills, setTab }) {
+  const today = todayStr();
+  const thisMonth = today.slice(0, 7);
+
+  // Last month
+  const lastMonthDate = new Date();
+  lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+  const lastMonth = lastMonthDate.toISOString().slice(0, 7);
+
+  const monthExpense = expenses.filter((e) => e.date?.startsWith(thisMonth)).reduce((s, e) => s + Number(e.amount), 0);
+  const lastMonthExpense = expenses.filter((e) => e.date?.startsWith(lastMonth)).reduce((s, e) => s + Number(e.amount), 0);
+  const expensePct = lastMonthExpense > 0 ? Math.round(((monthExpense - lastMonthExpense) / lastMonthExpense) * 100) : null;
+
+  const todayMilk = milk.filter((m) => m.date === today).reduce((s, m) => s + Number(m.litres), 0);
+  const yesterdayMilk = milk.filter((m) => {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    return m.date === y.toISOString().slice(0, 10);
+  }).reduce((s, m) => s + Number(m.litres), 0);
+  const milkPct = yesterdayMilk > 0 ? Math.round(((todayMilk - yesterdayMilk) / yesterdayMilk) * 100) : null;
+
   const lowStock = medicines.filter((m) => Number(m.quantity) <= Number(m.low_threshold || 0));
   const expExpiring = medicines.filter((m) => m.expiry && daysUntil(m.expiry) <= 30 && daysUntil(m.expiry) >= 0);
+
+  // Bills summary
+  const billsSubmitted = bills.filter((b) => b.status === "submitted");
+  const billsApproved = bills.filter((b) => b.status === "approved");
+  const billsPaid = bills.filter((b) => b.status === "paid");
+  const approvedTotal = billsApproved.reduce((s, b) => s + Number(b.amount), 0);
+
+  // Monthly trend — last 6 months, expenses + construction combined
+  const trendMonths = useMemo(() => {
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+      months.push(d.toISOString().slice(0, 7));
+    }
+    return months;
+  }, []);
+
+  const trendData = useMemo(() => trendMonths.map((ym) => {
+    const exp = expenses.filter((e) => e.date?.startsWith(ym)).reduce((s, e) => s + Number(e.amount), 0);
+    const con = construction.filter((e) => e.date?.startsWith(ym)).reduce((s, e) => s + Number(e.amount), 0);
+    return { ym, exp, con, total: exp + con };
+  }), [trendMonths, expenses, construction]);
+
+  const maxTrend = Math.max(...trendData.map((d) => d.total), 1);
 
   const byCat = useMemo(() => {
     const map = {};
@@ -405,26 +444,36 @@ function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
   }, [expenses]);
   const maxCat = byCat[0]?.[1] || 1;
 
-  const stat = (label, value, sub, color) => (
+  const StatCard = ({ label, value, sub, color, pct }) => (
     <div style={{ ...card, marginBottom: 0, flex: 1, minWidth: 140 }}>
-      <div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 23, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: "#9aa89e", marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+        {sub && <div style={{ fontSize: 11, color: "#9aa89e" }}>{sub}</div>}
+        {pct !== null && pct !== undefined && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: pct <= 0 ? "#27ae60" : "#c0392b" }}>
+            {pct > 0 ? "▲" : "▼"} {Math.abs(pct)}%
+          </div>
+        )}
+      </div>
     </div>
   );
 
   return (
     <div>
       <h2 style={{ margin: "0 0 14px", fontSize: 19, fontWeight: 700 }}>Overview</h2>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-        {stat("This month's expenses", fmt(monthExpense), "All categories", "#c0392b")}
-        {stat("Milk today", fmt(todayMilk) + " L", todayStr(), "#1e3a5f")}
-        {stat("Total spent", fmt(totalExpense), `${expenses.length} entries`, "#3a4a3f")}
-        {stat("Medicines", medicines.length, `${lowStock.length} low stock`, "#1e3a5f")}
+
+      {/* Stat cards */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <StatCard label="This month expenses" value={fmt(monthExpense)} sub="vs last month" color="#c0392b" pct={expensePct} />
+        <StatCard label="Milk today" value={todayMilk.toFixed(1) + " L"} sub="vs yesterday" color="#1e3a5f" pct={milkPct} />
+        <StatCard label="Bills to pay" value={fmt(approvedTotal)} sub={`${billsApproved.length} approved`} color="#1c5fa8" />
+        <StatCard label="Pending review" value={billsSubmitted.length} sub={`${billsPaid.length} paid this month`} color="#c79a2e" />
       </div>
 
+      {/* Alerts */}
       {(lowStock.length > 0 || expExpiring.length > 0) && (
-        <div style={{ ...card, background: "#fff7e6", border: "1px solid #ffe0a3" }}>
+        <div style={{ ...card, background: "#fff7e6", border: "1px solid #ffe0a3", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#9a6700", marginBottom: 8 }}>
             <AlertTriangle size={18} /> Attention needed
           </div>
@@ -433,8 +482,62 @@ function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
         </div>
       )}
 
-      <div style={card}>
-        <div style={{ fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={18} /> Spending by category</div>
+      {/* Bills summary */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+          <FileText size={18} /> Bills summary
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            { label: "Submitted", count: billsSubmitted.length, color: "#c79a2e", bg: "#fff8e6" },
+            { label: "Approved", count: billsApproved.length, color: "#1c5fa8", bg: "#eef3fb" },
+            { label: "Paid", count: billsPaid.length, color: "#27ae60", bg: "#eafaf1" },
+          ].map(({ label, count, color, bg }) => (
+            <div key={label} onClick={() => setTab("bills")} style={{ flex: 1, minWidth: 80, background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color }}>{count}</div>
+              <div style={{ fontSize: 11, color, fontWeight: 600, marginTop: 2 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+        {approvedTotal > 0 && (
+          <div style={{ marginTop: 10, padding: "8px 12px", background: "#eef3fb", borderRadius: 8, fontSize: 13, color: "#1c5fa8", fontWeight: 600 }}>
+            Outstanding to pay: {fmt(approvedTotal)}
+          </div>
+        )}
+      </div>
+
+      {/* Monthly trend chart */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+          <TrendingUp size={18} /> Monthly spending (last 6 months)
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100 }}>
+          {trendData.map(({ ym, exp, con, total }) => {
+            const barH = Math.max((total / maxTrend) * 88, total > 0 ? 4 : 0);
+            const expH = total > 0 ? (exp / total) * barH : 0;
+            const conH = barH - expH;
+            const label = new Date(ym + "-01").toLocaleDateString(undefined, { month: "short" });
+            return (
+              <div key={ym} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                <div style={{ fontSize: 10, color: "#8a93a8", fontWeight: 600 }}>{total > 0 ? fmt(total).replace("PKR ", "").replace(",", "") : ""}</div>
+                <div style={{ width: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", height: 88, gap: 0 }}>
+                  <div style={{ width: "100%", height: conH, background: "#1c5fa8", borderRadius: conH > 0 && expH === 0 ? "4px 4px 4px 4px" : "4px 4px 0 0" }} />
+                  <div style={{ width: "100%", height: expH, background: "#c79a2e", borderRadius: conH > 0 ? "0 0 4px 4px" : "4px 4px 4px 4px" }} />
+                </div>
+                <div style={{ fontSize: 10, color: "#5a6478", fontWeight: 600 }}>{label}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#5a6478" }}><div style={{ width: 10, height: 10, background: "#c79a2e", borderRadius: 2 }} /> Expenses</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#5a6478" }}><div style={{ width: 10, height: 10, background: "#1c5fa8", borderRadius: 2 }} /> Construction</div>
+        </div>
+      </div>
+
+      {/* Spending by category */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={18} /> Top spending categories</div>
         {byCat.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 14 }}>No expenses recorded yet.</div> :
           byCat.map(([cat, amt]) => (
             <div key={cat} style={{ marginBottom: 10 }}>
@@ -448,6 +551,7 @@ function Dashboard({ expenses, medicines, vaccinations, milk, setTab }) {
           ))}
       </div>
 
+      {/* Quick actions */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {[["expenses", "Add expense", Wallet], ["milk", "Log milk", Milk], ["vaccinations", "Record vaccine", Syringe]].map(([t, l, I]) => (
           <button key={t} onClick={() => setTab(t)} style={{ ...primaryBtn, flex: 1, minWidth: 130, justifyContent: "center" }}>
