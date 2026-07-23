@@ -100,8 +100,10 @@ function CenterMsg({ children }) {
 }
 
 function Login() {
+  const [mode, setMode] = useState("login"); // "login" | "signup" | "done"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -112,6 +114,26 @@ function Login() {
     setBusy(false);
   };
 
+  const signUp = async () => {
+    if (!name.trim()) { setErr("Please enter your name."); return; }
+    if (!email.trim()) { setErr("Please enter your email."); return; }
+    if (password.length < 6) { setErr("Password must be at least 6 characters."); return; }
+    setBusy(true); setErr("");
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } });
+    if (error) { setErr(error.message); setBusy(false); return; }
+    // Insert profile row with pending status
+    const userId = data.user?.id;
+    if (userId) {
+      await supabase.from("profiles").upsert({ id: userId, full_name: name.trim(), role: "accountant", status: "pending" });
+    }
+    // Sign out immediately so they don't auto-login
+    await supabase.auth.signOut();
+    setBusy(false);
+    setMode("done");
+  };
+
+  const inputSt = { width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "#fbfcfe" };
+
   return (
     <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
@@ -119,18 +141,53 @@ function Login() {
           <img src="/logo.jpeg" alt="Farm logo" style={{ width: 160, maxWidth: "70%", height: "auto", borderRadius: 12 }} />
         </div>
         <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "#1e3a5f" }}>Farm Manager</h1>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8a93a8", textAlign: "center" }}>Sign in to access your farm records</p>
-        <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Email</label>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoCapitalize="none" placeholder="you@example.com"
-          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "#fbfcfe" }} />
-        <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Password</label>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••"
-          onKeyDown={(e) => e.key === "Enter" && signIn()}
-          style={{ width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", marginBottom: 16, background: "#fbfcfe" }} />
-        {err && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 12 }}>{err}</div>}
-        <button onClick={signIn} disabled={busy} style={{ width: "100%", background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
+
+        {mode === "done" ? (
+          <>
+            <div style={{ textAlign: "center", margin: "20px 0 16px", padding: 16, background: "#eafaf1", borderRadius: 10, border: "1px solid #a9dfbf" }}>
+              <CheckCircle size={32} color="#27ae60" style={{ marginBottom: 8 }} />
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#1e8449" }}>Request submitted!</div>
+              <div style={{ fontSize: 13, color: "#5a6478", marginTop: 6 }}>Your account request has been sent to the admin for approval. You will be able to sign in once approved.</div>
+            </div>
+            <button onClick={() => { setMode("login"); setEmail(""); setPassword(""); setName(""); setErr(""); }} style={{ width: "100%", background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Back to sign in
+            </button>
+          </>
+        ) : mode === "signup" ? (
+          <>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8a93a8", textAlign: "center" }}>Create an account — pending admin approval</p>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Full Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ali Hassan" style={inputSt} />
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Email</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoCapitalize="none" placeholder="you@example.com" style={inputSt} />
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Password</label>
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Min. 6 characters"
+              onKeyDown={(e) => e.key === "Enter" && signUp()} style={inputSt} />
+            {err && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 12 }}>{err}</div>}
+            <button onClick={signUp} disabled={busy} style={{ width: "100%", background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1, marginBottom: 12 }}>
+              {busy ? "Submitting…" : "Request access"}
+            </button>
+            <button onClick={() => { setMode("login"); setErr(""); }} style={{ width: "100%", background: "none", border: "none", color: "#1e3a5f", fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+              Already have an account? Sign in
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8a93a8", textAlign: "center" }}>Sign in to access your farm records</p>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Email</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoCapitalize="none" placeholder="you@example.com" style={inputSt} />
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#3a4a3f", display: "block", marginBottom: 5 }}>Password</label>
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••••"
+              onKeyDown={(e) => e.key === "Enter" && signIn()} style={inputSt} />
+            {err && <div style={{ color: "#c0392b", fontSize: 13, marginBottom: 12 }}>{err}</div>}
+            <button onClick={signIn} disabled={busy} style={{ width: "100%", background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1, marginBottom: 12 }}>
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+            <button onClick={() => { setMode("signup"); setErr(""); }} style={{ width: "100%", background: "none", border: "none", color: "#1e3a5f", fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+              New user? Request access
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -142,7 +199,7 @@ function FarmApp({ session, onSignOut }) {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    supabase.from("profiles").select("role, full_name").eq("id", session.user.id).single()
+    supabase.from("profiles").select("role, full_name, status").eq("id", session.user.id).single()
       .then(({ data }) => setProfile(data));
   }, [session.user.id]);
 
@@ -182,6 +239,32 @@ function FarmApp({ session, onSignOut }) {
     animal_type: catList("animal_type", ANIMAL_TYPES),
     animal_status: catList("animal_status", ANIMAL_STATUSES),
   };
+
+  if (profile && profile.status === "pending") {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)", textAlign: "center" }}>
+          <Clock size={48} color="#c79a2e" style={{ marginBottom: 16 }} />
+          <h2 style={{ margin: "0 0 10px", color: "#1e3a5f" }}>Awaiting Approval</h2>
+          <p style={{ color: "#5a6478", fontSize: 14, margin: "0 0 20px" }}>Your account request is pending admin approval. Please check back later or contact the farm owner.</p>
+          <button onClick={onSignOut} style={{ background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile && profile.status === "rejected") {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)", textAlign: "center" }}>
+          <XCircle size={48} color="#c0392b" style={{ marginBottom: 16 }} />
+          <h2 style={{ margin: "0 0 10px", color: "#1e3a5f" }}>Access Denied</h2>
+          <p style={{ color: "#5a6478", fontSize: 14, margin: "0 0 20px" }}>Your account request was not approved. Please contact the farm owner for more information.</p>
+          <button onClick={onSignOut} style={{ background: "#c0392b", color: "white", border: "none", borderRadius: 10, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return <CenterMsg>Loading your farm records…</CenterMsg>;
@@ -1226,6 +1309,25 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
       setProfiles(profiles.map((p) => p.id === id ? { ...p, role: newRole } : p));
   };
 
+  const approveUser = async (id) => {
+    const { error } = await supabase.from("profiles").update({ status: "active" }).eq("id", id);
+    if (error) { alert("Could not approve: " + error.message); return; }
+    setProfiles(profiles.map((p) => p.id === id ? { ...p, status: "active" } : p));
+  };
+
+  const rejectUser = async (id) => {
+    if (!confirm("Reject and delete this user? This cannot be undone.")) return;
+    // Delete from auth via RPC, then mark rejected in profile as fallback
+    const { error: rpcErr } = await supabase.rpc("delete_auth_user", { target_user_id: id });
+    if (rpcErr) {
+      // Fallback: just mark rejected so they can't use the app
+      await supabase.from("profiles").update({ status: "rejected" }).eq("id", id);
+      setProfiles(profiles.map((p) => p.id === id ? { ...p, status: "rejected" } : p));
+    } else {
+      setProfiles(profiles.filter((p) => p.id !== id));
+    }
+  };
+
   const addCat = async (kind) => {
     const value = (adding[kind] || "").trim();
     if (!value) return;
@@ -1249,22 +1351,52 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
         <div style={{ fontSize: 12, color: "#c79a2e", fontWeight: 700, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{role}</div>
       </div>
 
-      {role === "owner" && (
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>Users</div>
-          {loadingProfiles ? <div style={{ fontSize: 13, color: "#8a93a8" }}>Loading…</div> :
-            profiles.map((p) => (
-              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
-                <div style={{ fontSize: 14 }}>{p.email || p.id.slice(0, 8)}</div>
-                <select value={p.role} onChange={(e) => changeRole(p.id, e.target.value)}
-                  style={{ border: "1px solid #cdd6e6", borderRadius: 8, padding: "5px 8px", fontSize: 13, background: "white", color: "#1e3a5f", fontWeight: 600 }}>
-                  <option value="owner">owner</option>
-                  <option value="accountant">accountant</option>
-                </select>
+      {role === "owner" && (() => {
+        const pending = profiles.filter((p) => p.status === "pending");
+        const active = profiles.filter((p) => p.status !== "pending");
+        return (
+          <>
+            {pending.length > 0 && (
+              <div style={{ ...card, marginBottom: 16, border: "1px solid #f0c040" }}>
+                <div style={{ fontWeight: 700, marginBottom: 12, color: "#c79a2e", display: "flex", alignItems: "center", gap: 8 }}>
+                  <Clock size={16} /> Pending approval ({pending.length})
+                </div>
+                {pending.map((p) => (
+                  <div key={p.id} style={{ padding: "10px 0", borderBottom: "1px solid #eef1f7" }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.full_name || "—"}</div>
+                    <div style={{ fontSize: 12, color: "#8a93a8", marginBottom: 8 }}>{p.email || p.id.slice(0, 8)}</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => approveUser(p.id)} style={{ background: "#27ae60", color: "white", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", flex: 1 }}>
+                        Approve
+                      </button>
+                      <button onClick={() => rejectUser(p.id)} style={{ background: "#c0392b", color: "white", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", flex: 1 }}>
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-        </div>
-      )}
+            )}
+            <div style={{ ...card, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12 }}>Users</div>
+              {loadingProfiles ? <div style={{ fontSize: 13, color: "#8a93a8" }}>Loading…</div> :
+                active.map((p) => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
+                    <div>
+                      <div style={{ fontSize: 14 }}>{p.full_name || p.email || p.id.slice(0, 8)}</div>
+                      {p.full_name && <div style={{ fontSize: 12, color: "#8a93a8" }}>{p.email || ""}</div>}
+                    </div>
+                    <select value={p.role} onChange={(e) => changeRole(p.id, e.target.value)}
+                      style={{ border: "1px solid #cdd6e6", borderRadius: 8, padding: "5px 8px", fontSize: 13, background: "white", color: "#1e3a5f", fontWeight: 600 }}>
+                      <option value="owner">owner</option>
+                      <option value="accountant">accountant</option>
+                    </select>
+                  </div>
+                ))}
+            </div>
+          </>
+        );
+      })()}
 
       {role === "owner" && (
         <div style={{ ...card, marginBottom: 16 }}>
