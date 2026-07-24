@@ -313,7 +313,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
-        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
+        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -1620,7 +1620,7 @@ function sendUnpaidToWhatsApp(bills) {
 const statusColor = { submitted: "#c79a2e", approved: "#1c5fa8", rejected: "#c0392b", paid: "#27ae60" };
 const statusBg = { submitted: "#fff8e6", approved: "#eef3fb", rejected: "#fbeaea", paid: "#eafaf1" };
 
-function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats }) {
+function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats, reload }) {
   const role = profile?.role || "accountant";
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterScope, setFilterScope] = useState("All");
@@ -1632,6 +1632,16 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   const [showPaid, setShowPaid] = useState(false);
   const [paidForm, setPaidForm] = useState({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "", proof_file: null });
   const [uploading, setUploading] = useState(false);
+
+  // Bulk selection state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkAction, setBulkAction] = useState(null); // "approve" | "paid"
+  const [bulkPaidForm, setBulkPaidForm] = useState({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "", proof_file: null });
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); setBulkAction(null); setBulkMsg(""); };
 
   const blankForm = () => ({
     bill_no: "", bill_date: todayStr(), vendor_id: "", vendor_name: "",
@@ -1730,6 +1740,62 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     (filterScope === "All" || b.scope === filterScope) &&
     (filterMonth === "All" || (b.bill_date || "").startsWith(filterMonth))
   );
+
+  // Bulk selection helpers
+  const selectedBills = filtered.filter((b) => selectedIds.has(b.id));
+  const selectedStatuses = [...new Set(selectedBills.map((b) => b.status))];
+  const selectionHomogeneous = selectedStatuses.length <= 1;
+  const selectionStatus = selectedStatuses[0] || null;
+  const selectionTotal = selectedBills.reduce((s, b) => s + Number(b.amount), 0);
+  const mixedHint = selectedIds.size > 0 && !selectionHomogeneous;
+
+  const toggleSelect = (id, status) => {
+    if (!selectMode) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) { next.delete(id); }
+    else { next.add(id); }
+    setSelectedIds(next);
+    setBulkMsg("");
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(filtered.map((b) => b.id)));
+    setBulkMsg("");
+  };
+
+  const bulkApprove = async () => {
+    setBulkUploading(true);
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from("bills").update({ status: "approved" }).in("id", ids);
+    if (error) { alert("Bulk approve failed: " + error.message); setBulkUploading(false); return; }
+    setBulkMsg(`${ids.length} bill${ids.length === 1 ? "" : "s"} approved · ${fmt(selectionTotal)}`);
+    setBulkAction(null);
+    await reload();
+    setBulkUploading(false);
+    exitSelectMode();
+  };
+
+  const bulkMarkPaid = async () => {
+    setBulkUploading(true);
+    let payment_proof_path = null;
+    if (bulkPaidForm.proof_file) {
+      const blob = await compressImage(bulkPaidForm.proof_file);
+      const path = `payments/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      const { error: upErr } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+      if (upErr) { alert("Could not upload proof photo: " + upErr.message); setBulkUploading(false); return; }
+      payment_proof_path = path;
+    }
+    const ids = Array.from(selectedIds);
+    const patch = { status: "paid", paid_at: bulkPaidForm.paid_at || todayStr(), paid_method: bulkPaidForm.paid_method, paid_reference: bulkPaidForm.paid_reference || null };
+    if (payment_proof_path) patch.payment_proof_path = payment_proof_path;
+    const { error } = await supabase.from("bills").update(patch).in("id", ids);
+    if (error) { alert("Bulk mark paid failed: " + error.message); setBulkUploading(false); return; }
+    setBulkMsg(`${ids.length} bill${ids.length === 1 ? "" : "s"} marked paid · ${fmt(selectionTotal)} posted`);
+    setBulkAction(null);
+    await reload();
+    setBulkUploading(false);
+    exitSelectMode();
+  };
 
   // Bill detail view
   if (selected) {
@@ -1845,10 +1911,24 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   }
 
   return (
-    <div>
-      <SectionHeader title="Bills" onAdd={openAdd} onExport={() => exportCSV("bills.csv", bills)} />
+    <div style={{ paddingBottom: selectMode ? 80 : 0 }}>
+      {/* Header row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <SectionHeader title="Bills" onAdd={openAdd} onExport={() => exportCSV("bills.csv", bills)} />
+        {role === "owner" && !selectMode && filtered.length > 0 && (
+          <button onClick={() => setSelectMode(true)} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#1e3a5f" }}>Select</button>
+        )}
+        {selectMode && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={selectAll} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer", color: "#1e3a5f", fontWeight: 600 }}>All</button>
+            <button onClick={exitSelectMode} style={{ border: "none", background: "none", padding: 4, cursor: "pointer", color: "#c0392b" }}><X size={20} /></button>
+          </div>
+        )}
+      </div>
 
-      {(() => {
+      {bulkMsg && <div style={{ background: "#eafaf1", border: "1px solid #a9dfbf", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#1e8449", marginBottom: 12 }}>{bulkMsg}</div>}
+
+      {!selectMode && (() => {
         const unpaidBills = bills.filter((b) => b.status === "approved");
         const unpaidTotal = unpaidBills.reduce((s, b) => s + Number(b.amount), 0);
         if (unpaidBills.length > 0) return (
@@ -1859,7 +1939,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         return null;
       })()}
 
-      {(() => {
+      {!selectMode && (() => {
         const thisMonth = todayStr().slice(0, 7);
         const outstanding = bills.filter((b) => b.status === "approved").reduce((s, b) => s + Number(b.amount), 0);
         const paidThisMonth = bills.filter((b) => b.status === "paid" && (b.paid_at || "").startsWith(thisMonth)).reduce((s, b) => s + Number(b.amount), 0);
@@ -1879,7 +1959,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
 
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
         {["All", "submitted", "approved", "paid", "rejected"].map((s) => (
-          <button key={s} onClick={() => setFilterStatus(s)} style={{
+          <button key={s} onClick={() => { setFilterStatus(s); setSelectedIds(new Set()); }} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterStatus === s ? "#1e3a5f" : "white", color: filterStatus === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterStatus === s ? 700 : 500, textTransform: "capitalize",
           }}>{s}</button>
@@ -1888,7 +1968,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
 
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {["All", "farm", "construction"].map((s) => (
-          <button key={s} onClick={() => setFilterScope(s)} style={{
+          <button key={s} onClick={() => { setFilterScope(s); setSelectedIds(new Set()); }} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterScope === s ? "#c79a2e" : "white", color: filterScope === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterScope === s ? 700 : 500, textTransform: "capitalize",
           }}>{s}</button>
@@ -1900,8 +1980,16 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
       {filtered.length === 0 ? <Empty icon={FileText} text="No bills yet. Tap Add to create one." /> :
         filtered.map((b) => {
           const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "Unknown vendor";
+          const isChecked = selectedIds.has(b.id);
           return (
-            <div key={b.id} onClick={() => setSelected(b)} style={{ ...card, padding: "12px 14px", marginBottom: 10, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div key={b.id}
+              onClick={() => selectMode ? toggleSelect(b.id, b.status) : setSelected(b)}
+              style={{ ...card, padding: "12px 14px", marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, border: isChecked ? "2px solid #1e3a5f" : "1px solid transparent", boxSizing: "border-box" }}>
+              {selectMode && (
+                <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isChecked ? "#1e3a5f" : "#cdd6e6"}`, background: isChecked ? "#1e3a5f" : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {isChecked && <div style={{ width: 12, height: 12, background: "white", borderRadius: 2, clipPath: "polygon(20% 50%, 0% 30%, 40% 70%, 100% 0%, 80% 20%, 40% 55%)" }} />}
+                </div>
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{vendorLabel}</span>
@@ -1909,13 +1997,83 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
                 </div>
                 <div style={{ fontSize: 12, color: "#8a93a8" }}>{b.bill_date} · {b.category}{b.bill_no ? ` · #${b.bill_no}` : ""}</div>
               </div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b", marginLeft: 10 }}>{fmt(b.amount)}</div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b", marginLeft: 4, flexShrink: 0 }}>{fmt(b.amount)}</div>
             </div>
           );
         })}
 
       {showForm && (
         <BillForm form={form} setForm={setForm} cats={cats} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} />
+      )}
+
+      {/* Bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div style={{ position: "fixed", bottom: 70, left: 0, right: 0, zIndex: 50, background: "white", borderTop: "2px solid #1e3a5f", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a5f" }}>{selectedIds.size} selected · {fmt(selectionTotal)}</div>
+            {mixedHint && <div style={{ fontSize: 12, color: "#c0392b", fontWeight: 600 }}>Select bills with the same status</div>}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {selectionHomogeneous && selectionStatus === "submitted" && role === "owner" && (
+              <button onClick={() => setBulkAction("approve")} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#1c5fa8" }}>
+                <CheckCircle size={16} /> Approve {selectedIds.size}
+              </button>
+            )}
+            {selectionHomogeneous && selectionStatus === "approved" && (
+              <button onClick={() => { setBulkPaidForm({ paid_at: todayStr(), paid_method: "Cash", paid_reference: "", proof_file: null }); setBulkAction("paid"); }} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60" }}>
+                <CheckCircle size={16} /> Mark {selectedIds.size} paid
+              </button>
+            )}
+            {!selectionHomogeneous && (
+              <button disabled style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: 0.4, cursor: "not-allowed" }}>
+                Select same status
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk approve confirm modal */}
+      {bulkAction === "approve" && (
+        <Modal title="Approve bills?" onClose={() => setBulkAction(null)}>
+          <div style={{ fontSize: 15, marginBottom: 8 }}>Approve <strong>{selectedIds.size} bill{selectedIds.size === 1 ? "" : "s"}</strong>?</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#1c5fa8", marginBottom: 8 }}>{fmt(selectionTotal)}</div>
+          <div style={{ fontSize: 13, color: "#8a93a8", marginBottom: 16 }}>This cannot be undone in bulk — you would need to reverse each one individually.</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={bulkApprove} disabled={bulkUploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#1c5fa8", opacity: bulkUploading ? 0.6 : 1 }}>
+              {bulkUploading ? "Approving…" : "Approve all"}
+            </button>
+            <button onClick={() => setBulkAction(null)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk mark paid modal */}
+      {bulkAction === "paid" && (
+        <Modal title={`Mark ${selectedIds.size} bills paid`} onClose={() => setBulkAction(null)}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#27ae60", marginBottom: 4 }}>{fmt(selectionTotal)}</div>
+          <div style={{ fontSize: 12, color: "#8a93a8", marginBottom: 14 }}>These details will be applied to all {selectedIds.size} bills.</div>
+          <Field label="Payment date"><input type="date" value={bulkPaidForm.paid_at} onChange={(e) => setBulkPaidForm({ ...bulkPaidForm, paid_at: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Method">
+            <select value={bulkPaidForm.paid_method} onChange={(e) => setBulkPaidForm({ ...bulkPaidForm, paid_method: e.target.value })} style={inputStyle}>
+              {["Cash", "Bank", "Easypaisa", "JazzCash", "Cheque"].map((m) => <option key={m}>{m}</option>)}
+            </select>
+          </Field>
+          <Field label="Reference (optional)"><input value={bulkPaidForm.paid_reference} onChange={(e) => setBulkPaidForm({ ...bulkPaidForm, paid_reference: e.target.value })} placeholder="Cheque no, txn ID…" style={inputStyle} /></Field>
+          <Field label="Payment proof photo (optional)">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: bulkPaidForm.proof_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+              <Camera size={18} />
+              {bulkPaidForm.proof_file ? bulkPaidForm.proof_file.name : "Screenshot or photo of payment"}
+              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setBulkPaidForm({ ...bulkPaidForm, proof_file: e.target.files[0] || null })} />
+            </label>
+          </Field>
+          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+            <button onClick={bulkMarkPaid} disabled={bulkUploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60", opacity: bulkUploading ? 0.6 : 1 }}>
+              {bulkUploading ? "Saving…" : "Mark all paid"}
+            </button>
+            <button onClick={() => setBulkAction(null)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
