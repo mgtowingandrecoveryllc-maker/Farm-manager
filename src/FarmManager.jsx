@@ -1613,9 +1613,14 @@ function buildUnpaidMessage(bills) {
   return ["Farm Manager — Bills approved & awaiting payment", `As of ${today}`, "", ...lines, "", `Total to pay: ${fmt(total)}`, `${unpaid.length} bill${unpaid.length === 1 ? "" : "s"}`].join("\n");
 }
 function sendUnpaidToWhatsApp(bills) {
-  const url = `https://wa.me/?text=${encodeURIComponent(buildUnpaidMessage(bills))}`;
-  // Use location.href so it works in PWA standalone mode (window.open is blocked)
-  window.location.href = url;
+  const text = encodeURIComponent(buildUnpaidMessage(bills));
+  const a = document.createElement("a");
+  a.href = `https://api.whatsapp.com/send?text=${text}`;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ---------- bills ----------
