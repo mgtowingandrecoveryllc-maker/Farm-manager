@@ -1835,6 +1835,19 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
           </div>
         )}
 
+        {/* Revert approved → submitted */}
+        {role === "owner" && b.status === "approved" && !showPaid && (
+          <button onClick={async () => {
+            if (!window.confirm("Revert this bill back to submitted?")) return;
+            const { error } = await supabase.from("bills").update({ status: "submitted", approved_at: null, approved_by: null }).eq("id", b.id);
+            if (error) { alert("Could not revert: " + error.message); return; }
+            setBills(bills.map((x) => x.id === b.id ? { ...x, status: "submitted", approved_at: null, approved_by: null } : x));
+            setSelected(null);
+          }} style={{ border: "1px solid #c79a2e", background: "#fff8e6", color: "#c79a2e", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", width: "100%", marginBottom: 10 }}>
+            ↩ Revert to submitted
+          </button>
+        )}
+
         {/* Approve / Reject */}
         {canApprove && !showReject && !showPaid && (
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
@@ -1874,7 +1887,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: paidForm.proof_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
                 <Camera size={18} />
                 {paidForm.proof_file ? paidForm.proof_file.name : "Screenshot or photo of payment"}
-                <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setPaidForm({ ...paidForm, proof_file: e.target.files[0] || null })} />
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setPaidForm({ ...paidForm, proof_file: e.target.files[0] || null })} />
               </label>
             </Field>
             <div style={{ display: "flex", gap: 10 }}>
@@ -2064,7 +2077,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: bulkPaidForm.proof_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
               <Camera size={18} />
               {bulkPaidForm.proof_file ? bulkPaidForm.proof_file.name : "Screenshot or photo of payment"}
-              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setBulkPaidForm({ ...bulkPaidForm, proof_file: e.target.files[0] || null })} />
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setBulkPaidForm({ ...bulkPaidForm, proof_file: e.target.files[0] || null })} />
             </label>
           </Field>
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
@@ -2118,7 +2131,7 @@ function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClos
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.receipt_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
           <Camera size={18} />
           {form.receipt_file ? form.receipt_file.name : "Take photo or choose file"}
-          <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setForm({ ...form, receipt_file: e.target.files[0] || null })} />
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, receipt_file: e.target.files[0] || null })} />
         </label>
       </Field>
       <button onClick={onSave} disabled={uploading} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, opacity: uploading ? 0.6 : 1 }}>
