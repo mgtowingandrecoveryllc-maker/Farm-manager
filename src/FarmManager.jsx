@@ -289,23 +289,23 @@ function FarmApp({ session, onSignOut }) {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", color: "#1f2d24", paddingBottom: 76 }}>
-      <header style={{ background: "#1e3a5f", color: "white", padding: "12px 16px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "3px solid #e8b923" }}>
+    <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", color: "#1f2d24", paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}>
+      <header style={{ background: "#1e3a5f", color: "white", padding: "env(safe-area-inset-top, 0px) 16px 12px", paddingTop: "max(env(safe-area-inset-top), 12px)", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "3px solid #e8b923" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/logo.jpeg" alt="logo" style={{ height: 38, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
+          <img src="/logo.jpeg" alt="logo" style={{ height: 40, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Farm Manager</h1>
-            {profile && <div style={{ fontSize: 11, color: "#e8b923", fontWeight: 600, marginTop: 1 }}>{profile.role}</div>}
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: -0.3 }}>Farm Manager</h1>
+            {profile && <div style={{ fontSize: 11, color: "#e8b923", fontWeight: 600, marginTop: 1, textTransform: "uppercase", letterSpacing: 0.5 }}>{profile.role}</div>}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 14 }}>
-          <button onClick={() => setTab("settings")} title="Settings" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><SettingsIcon size={19} /></button>
-          <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><RefreshCw size={19} /></button>
-          <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: 0 }}><LogOut size={19} /></button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setTab("settings")} title="Settings" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: "10px", WebkitTapHighlightColor: "transparent" }}><SettingsIcon size={21} /></button>
+          <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: "10px", WebkitTapHighlightColor: "transparent" }}><RefreshCw size={21} /></button>
+          <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: "10px", WebkitTapHighlightColor: "transparent" }}><LogOut size={21} /></button>
         </div>
       </header>
 
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+      <main style={{ maxWidth: 720, margin: "0 auto", padding: "14px 14px" }}>
         {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, setTab }} />}
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
@@ -318,21 +318,22 @@ function FarmApp({ session, onSignOut }) {
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", justifyContent: "space-around", zIndex: 10 }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", justifyContent: "space-around", zIndex: 10, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 12px rgba(0,0,0,0.07)" }}>
         {tabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: 1, border: "none", background: "none", padding: "8px 1px 10px",
-              color: active ? "#1e3a5f" : "#8a93a8", display: "flex", flexDirection: "column",
-              alignItems: "center", gap: 3, cursor: "pointer", fontSize: 10, fontWeight: active ? 700 : 500,
+              flex: 1, border: "none", background: "none", padding: "10px 2px 8px",
+              color: active ? "#1e3a5f" : "#9aa3b0", display: "flex", flexDirection: "column",
+              alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, fontWeight: active ? 700 : 500,
               minWidth: 0, borderTop: active ? "3px solid #e8b923" : "3px solid transparent", marginTop: -1,
+              WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
             }}>
               <div style={{ position: "relative" }}>
-                <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
+                <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
                 {t.badge > 0 && (
-                  <span style={{ position: "absolute", top: -5, right: -7, background: "#c0392b", color: "white", borderRadius: "50%", width: 16, height: 16, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
+                  <span style={{ position: "absolute", top: -5, right: -8, background: "#c0392b", color: "white", borderRadius: "50%", width: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
                 )}
               </div>
               {t.label}
@@ -345,10 +346,10 @@ function FarmApp({ session, onSignOut }) {
 }
 
 // ---------- reusable UI ----------
-const card = { background: "white", borderRadius: 14, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 14 };
-const inputStyle = { width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", background: "#fbfcfe" };
-const labelStyle = { fontSize: 13, fontWeight: 600, color: "#3a4a3f", marginBottom: 5, display: "block" };
-const primaryBtn = { background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "12px 16px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 };
+const card = { background: "white", borderRadius: 16, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 14 };
+const inputStyle = { width: "100%", padding: "13px 14px", borderRadius: 12, border: "1px solid #cdd6e6", fontSize: 16, boxSizing: "border-box", background: "#fbfcfe", WebkitAppearance: "none", appearance: "none" };
+const labelStyle = { fontSize: 13, fontWeight: 600, color: "#3a4a3f", marginBottom: 6, display: "block" };
+const primaryBtn = { background: "#1e3a5f", color: "white", border: "none", borderRadius: 12, padding: "13px 18px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, WebkitTapHighlightColor: "transparent", touchAction: "manipulation" };
 
 function Field({ label, children }) {
   return <div style={{ marginBottom: 12 }}><label style={labelStyle}>{label}</label>{children}</div>;
@@ -2217,5 +2218,5 @@ function Reports({ expenses, construction, milk }) {
   );
 }
 
-const delBtn = { border: "none", background: "#fbeaea", color: "#c0392b", borderRadius: 8, padding: 8, cursor: "pointer", flexShrink: 0 };
+const delBtn = { border: "none", background: "#fbeaea", color: "#c0392b", borderRadius: 10, padding: 10, cursor: "pointer", flexShrink: 0, WebkitTapHighlightColor: "transparent", touchAction: "manipulation" };
 const stepBtn = { border: "1px solid #cdd6e6", background: "white", width: 38, height: 38, borderRadius: 10, fontSize: 22, fontWeight: 700, color: "#1e3a5f", cursor: "pointer", lineHeight: 1 };
