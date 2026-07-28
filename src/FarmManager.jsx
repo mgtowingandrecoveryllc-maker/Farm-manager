@@ -1612,15 +1612,19 @@ function buildUnpaidMessage(bills) {
   const total = unpaid.reduce((s, b) => s + Number(b.amount), 0);
   return ["Farm Manager — Bills approved & awaiting payment", `As of ${today}`, "", ...lines, "", `Total to pay: ${fmt(total)}`, `${unpaid.length} bill${unpaid.length === 1 ? "" : "s"}`].join("\n");
 }
-function sendUnpaidToWhatsApp(bills) {
-  const text = encodeURIComponent(buildUnpaidMessage(bills));
-  const a = document.createElement("a");
-  a.href = `https://api.whatsapp.com/send?text=${text}`;
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+async function sendUnpaidToWhatsApp(bills) {
+  const text = buildUnpaidMessage(bills);
+  // Use native share sheet on mobile (PWA) — user picks WhatsApp from the list
+  if (navigator.share) {
+    try {
+      await navigator.share({ text });
+      return;
+    } catch (e) {
+      if (e.name === "AbortError") return; // user cancelled
+    }
+  }
+  // Desktop fallback
+  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
 }
 
 // ---------- bills ----------
