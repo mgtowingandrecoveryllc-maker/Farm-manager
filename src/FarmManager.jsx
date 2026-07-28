@@ -1614,7 +1614,8 @@ function buildUnpaidMessage(bills) {
 }
 function sendUnpaidToWhatsApp(bills) {
   const url = `https://wa.me/?text=${encodeURIComponent(buildUnpaidMessage(bills))}`;
-  window.open(url, "_blank");
+  // Use location.href so it works in PWA standalone mode (window.open is blocked)
+  window.location.href = url;
 }
 
 // ---------- bills ----------
