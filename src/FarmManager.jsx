@@ -603,8 +603,13 @@ function empBalance(advances, emp) {
 function AdvancesPanel({ advances, setAdvances }) {
   const [expanded, setExpanded] = useState(false);
   const [showGive, setShowGive] = useState(false);
-  const [showDetail, setShowDetail] = useState(null); // employee name
-  const [giveForm, setGiveForm] = useState({ employee: EMPLOYEES[0], amount: "", date: todayStr(), note: "" });
+  const [showDetail, setShowDetail] = useState(null);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [editingAdv, setEditingAdv] = useState(null); // row being edited
+  const blankGive = () => ({ employee: EMPLOYEES[0], amount: "", date: todayStr(), note: "" });
+  const blankAdj = (emp) => ({ kind: "advance", amount: "", date: todayStr(), note: "", employee: emp || EMPLOYEES[0] });
+  const [giveForm, setGiveForm] = useState(blankGive());
+  const [adjForm, setAdjForm] = useState(blankAdj());
 
   const balances = EMPLOYEES.map((e) => ({ employee: e, balance: empBalance(advances, e) }));
   const owing = balances.filter((b) => b.balance > 0);
@@ -614,7 +619,27 @@ function AdvancesPanel({ advances, setAdvances }) {
     if (!giveForm.amount || Number(giveForm.amount) <= 0) { alert("Enter an amount."); return; }
     const row = { employee: giveForm.employee, kind: "advance", amount: Number(giveForm.amount), date: giveForm.date, note: giveForm.note || null };
     const saved = await insertRow("advances", row);
-    if (saved) { setAdvances([saved, ...advances]); setShowGive(false); setGiveForm({ employee: EMPLOYEES[0], amount: "", date: todayStr(), note: "" }); }
+    if (saved) { setAdvances([saved, ...advances]); setShowGive(false); setGiveForm(blankGive()); }
+  };
+
+  const saveAdjust = async () => {
+    if (!adjForm.amount || Number(adjForm.amount) <= 0) { alert("Enter an amount."); return; }
+    if (editingAdv) {
+      const patch = { kind: adjForm.kind, amount: Number(adjForm.amount), date: adjForm.date, note: adjForm.note || null };
+      if (await updateRow("advances", editingAdv, patch))
+        setAdvances(advances.map((a) => a.id === editingAdv ? { ...a, ...patch } : a));
+    } else {
+      const row = { employee: adjForm.employee, kind: adjForm.kind, amount: Number(adjForm.amount), date: adjForm.date, note: adjForm.note || null };
+      const saved = await insertRow("advances", row);
+      if (saved) setAdvances([saved, ...advances]);
+    }
+    setShowAdjust(false); setEditingAdv(null); setAdjForm(blankAdj(showDetail));
+  };
+
+  const openEdit = (a) => {
+    setEditingAdv(a.id);
+    setAdjForm({ kind: a.kind, amount: String(a.amount), date: a.date, note: a.note || "", employee: a.employee });
+    setShowAdjust(true);
   };
 
   const deleteAdvance = async (id) => {
@@ -635,16 +660,13 @@ function AdvancesPanel({ advances, setAdvances }) {
             <button onClick={() => setExpanded(!expanded)} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer", color: "#1e3a5f" }}>{expanded ? "Hide" : "View all"}</button>
           </div>
         </div>
-
         {owing.length === 0 && !expanded && <div style={{ fontSize: 13, color: "#8a93a8", marginTop: 10 }}>No outstanding advances. All cleared.</div>}
-
         {(expanded ? balances : owing).map(({ employee, balance }) => (
           <div key={employee} onClick={() => setShowDetail(employee)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #eef1f7", cursor: "pointer" }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{employee}</div>
             <div style={{ fontWeight: 800, fontSize: 14, color: balance > 0 ? "#c0392b" : "#27ae60" }}>{balance > 0 ? fmt(balance) : "Cleared"}</div>
           </div>
         ))}
-
         {totalOwed > 0 && (
           <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, fontWeight: 700 }}>
             <span style={{ color: "#5a6478" }}>Total owed</span>
@@ -653,10 +675,11 @@ function AdvancesPanel({ advances, setAdvances }) {
         )}
       </div>
 
+      {/* Give advance modal */}
       {showGive && (
         <Modal title="Give advance" onClose={() => setShowGive(false)}>
           <div style={{ fontSize: 13, color: "#8a93a8", marginBottom: 14, padding: "8px 12px", background: "#fff8e6", borderRadius: 8 }}>
-            This is a loan — it will NOT count as an expense until deducted from salary.
+            This is a loan — it counts as expense only when deducted from salary.
           </div>
           <Field label="Employee">
             <select value={giveForm.employee} onChange={(e) => setGiveForm({ ...giveForm, employee: e.target.value })} style={inputStyle}>
@@ -665,30 +688,54 @@ function AdvancesPanel({ advances, setAdvances }) {
           </Field>
           <Field label="Amount"><input type="number" inputMode="decimal" value={giveForm.amount} onChange={(e) => setGiveForm({ ...giveForm, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
           <Field label="Date"><input type="date" value={giveForm.date} onChange={(e) => setGiveForm({ ...giveForm, date: e.target.value })} style={inputStyle} /></Field>
-          <Field label="Note (optional)"><input value={giveForm.note} onChange={(e) => setGiveForm({ ...giveForm, note: e.target.value })} placeholder="Reason for advance" style={inputStyle} /></Field>
+          <Field label="Note (optional)"><input value={giveForm.note} onChange={(e) => setGiveForm({ ...giveForm, note: e.target.value })} placeholder="Reason" style={inputStyle} /></Field>
           <button onClick={giveAdvance} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Record advance</button>
         </Modal>
       )}
 
-      {showDetail && (
-        <Modal title={`${showDetail} — Advance history`} onClose={() => setShowDetail(null)}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, padding: "10px 14px", background: detailBalance > 0 ? "#fbeaea" : "#eafaf1", borderRadius: 10 }}>
-            <span style={{ fontWeight: 600 }}>Current balance</span>
+      {/* Adjust / Edit modal */}
+      {showAdjust && (
+        <Modal title={editingAdv ? "Edit entry" : `Adjust — ${showDetail}`} onClose={() => { setShowAdjust(false); setEditingAdv(null); }}>
+          {!editingAdv && (
+            <Field label="Type">
+              <select value={adjForm.kind} onChange={(e) => setAdjForm({ ...adjForm, kind: e.target.value })} style={inputStyle}>
+                <option value="advance">Advance (increases debt)</option>
+                <option value="deduction">Deduction (reduces debt)</option>
+              </select>
+            </Field>
+          )}
+          <Field label="Amount"><input type="number" inputMode="decimal" value={adjForm.amount} onChange={(e) => setAdjForm({ ...adjForm, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+          <Field label="Date"><input type="date" value={adjForm.date} onChange={(e) => setAdjForm({ ...adjForm, date: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Note (optional)"><input value={adjForm.note} onChange={(e) => setAdjForm({ ...adjForm, note: e.target.value })} placeholder="Reason" style={inputStyle} /></Field>
+          <button onClick={saveAdjust} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingAdv ? "Save changes" : "Apply adjustment"}</button>
+        </Modal>
+      )}
+
+      {/* Employee detail modal */}
+      {showDetail && !showAdjust && (
+        <Modal title={`${showDetail} — History`} onClose={() => setShowDetail(null)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, padding: "10px 14px", background: detailBalance > 0 ? "#fbeaea" : "#eafaf1", borderRadius: 10 }}>
+            <span style={{ fontWeight: 600 }}>Balance</span>
             <span style={{ fontWeight: 800, color: detailBalance > 0 ? "#c0392b" : "#27ae60", fontSize: 18 }}>{fmt(detailBalance)}</span>
           </div>
+          <button onClick={() => { setAdjForm(blankAdj(showDetail)); setEditingAdv(null); setShowAdjust(true); }}
+            style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginBottom: 14, background: "#c79a2e" }}>
+            Adjust balance
+          </button>
           {detailRows.length === 0 ? <div style={{ fontSize: 13, color: "#8a93a8" }}>No entries yet.</div> :
             detailRows.map((a) => (
               <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #eef1f7" }}>
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: a.kind === "advance" ? "#c0392b" : "#27ae60" }}>
                     {a.kind === "advance" ? "+" : "−"}{fmt(a.amount)}
                     <span style={{ fontSize: 11, fontWeight: 400, color: "#8a93a8", marginLeft: 8 }}>{a.kind === "advance" ? "Advance" : "Deducted"}</span>
                   </div>
                   <div style={{ fontSize: 11, color: "#8a93a8" }}>{a.date}{a.note ? ` · ${a.note}` : ""}</div>
                 </div>
-                {a.kind === "advance" && (
-                  <button onClick={() => deleteAdvance(a.id)} style={delBtn}><Trash2 size={15} /></button>
-                )}
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => openEdit(a)} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", color: "#1e3a5f" }}>Edit</button>
+                  <button onClick={() => deleteAdvance(a.id)} style={delBtn}><Trash2 size={14} /></button>
+                </div>
               </div>
             ))}
         </Modal>
