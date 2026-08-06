@@ -207,17 +207,18 @@ function FarmApp({ session, onSignOut }) {
   const [cats, setCats] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [bills, setBills] = useState([]);
+  const [advances, setAdvances] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
       fetchTable("categories"), fetchTable("vendors"),
-      fetchTable("bills"),
+      fetchTable("bills"), fetchTable("advances"),
     ]);
-    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl);
+    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv);
     setLoading(false);
   };
 
@@ -307,7 +308,7 @@ function FarmApp({ session, onSignOut }) {
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "14px 14px" }}>
         {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, setTab }} />}
-        {tab === "expenses" && <Expenses {...{ expenses, setExpenses }} categories={categoryLists.expense} />}
+        {tab === "expenses" && <Expenses {...{ expenses, setExpenses, advances, setAdvances }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
         {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
@@ -593,37 +594,157 @@ function MonthFilter({ months, value, onChange }) {
   );
 }
 
+// ---------- advances helpers ----------
+function empBalance(advances, emp) {
+  return advances.filter((a) => a.employee === emp).reduce((s, a) => a.kind === "advance" ? s + Number(a.amount) : s - Number(a.amount), 0);
+}
+
+// ---------- AdvancesPanel ----------
+function AdvancesPanel({ advances, setAdvances }) {
+  const [expanded, setExpanded] = useState(false);
+  const [showGive, setShowGive] = useState(false);
+  const [showDetail, setShowDetail] = useState(null); // employee name
+  const [giveForm, setGiveForm] = useState({ employee: EMPLOYEES[0], amount: "", date: todayStr(), note: "" });
+
+  const balances = EMPLOYEES.map((e) => ({ employee: e, balance: empBalance(advances, e) }));
+  const owing = balances.filter((b) => b.balance > 0);
+  const totalOwed = owing.reduce((s, b) => s + b.balance, 0);
+
+  const giveAdvance = async () => {
+    if (!giveForm.amount || Number(giveForm.amount) <= 0) { alert("Enter an amount."); return; }
+    const row = { employee: giveForm.employee, kind: "advance", amount: Number(giveForm.amount), date: giveForm.date, note: giveForm.note || null };
+    const saved = await insertRow("advances", row);
+    if (saved) { setAdvances([saved, ...advances]); setShowGive(false); setGiveForm({ employee: EMPLOYEES[0], amount: "", date: todayStr(), note: "" }); }
+  };
+
+  const deleteAdvance = async (id) => {
+    if (!window.confirm("Delete this entry?")) return;
+    if (await deleteRow("advances", id)) setAdvances(advances.filter((a) => a.id !== id));
+  };
+
+  const detailRows = showDetail ? advances.filter((a) => a.employee === showDetail).sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+  const detailBalance = showDetail ? empBalance(advances, showDetail) : 0;
+
+  return (
+    <>
+      <div style={{ ...card, marginBottom: 14, border: totalOwed > 0 ? "1px solid #f0c040" : "1px solid #eef1f7" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f" }}>Advances / Debt</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowGive(true)} style={{ ...primaryBtn, padding: "8px 12px", fontSize: 13 }}><Plus size={15} /> Give</button>
+            <button onClick={() => setExpanded(!expanded)} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer", color: "#1e3a5f" }}>{expanded ? "Hide" : "View all"}</button>
+          </div>
+        </div>
+
+        {owing.length === 0 && !expanded && <div style={{ fontSize: 13, color: "#8a93a8", marginTop: 10 }}>No outstanding advances. All cleared.</div>}
+
+        {(expanded ? balances : owing).map(({ employee, balance }) => (
+          <div key={employee} onClick={() => setShowDetail(employee)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #eef1f7", cursor: "pointer" }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{employee}</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: balance > 0 ? "#c0392b" : "#27ae60" }}>{balance > 0 ? fmt(balance) : "Cleared"}</div>
+          </div>
+        ))}
+
+        {totalOwed > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, fontWeight: 700 }}>
+            <span style={{ color: "#5a6478" }}>Total owed</span>
+            <span style={{ color: "#c0392b", fontSize: 16 }}>{fmt(totalOwed)}</span>
+          </div>
+        )}
+      </div>
+
+      {showGive && (
+        <Modal title="Give advance" onClose={() => setShowGive(false)}>
+          <div style={{ fontSize: 13, color: "#8a93a8", marginBottom: 14, padding: "8px 12px", background: "#fff8e6", borderRadius: 8 }}>
+            This is a loan — it will NOT count as an expense until deducted from salary.
+          </div>
+          <Field label="Employee">
+            <select value={giveForm.employee} onChange={(e) => setGiveForm({ ...giveForm, employee: e.target.value })} style={inputStyle}>
+              {EMPLOYEES.map((n) => <option key={n}>{n}</option>)}
+            </select>
+          </Field>
+          <Field label="Amount"><input type="number" inputMode="decimal" value={giveForm.amount} onChange={(e) => setGiveForm({ ...giveForm, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+          <Field label="Date"><input type="date" value={giveForm.date} onChange={(e) => setGiveForm({ ...giveForm, date: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Note (optional)"><input value={giveForm.note} onChange={(e) => setGiveForm({ ...giveForm, note: e.target.value })} placeholder="Reason for advance" style={inputStyle} /></Field>
+          <button onClick={giveAdvance} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>Record advance</button>
+        </Modal>
+      )}
+
+      {showDetail && (
+        <Modal title={`${showDetail} — Advance history`} onClose={() => setShowDetail(null)}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, padding: "10px 14px", background: detailBalance > 0 ? "#fbeaea" : "#eafaf1", borderRadius: 10 }}>
+            <span style={{ fontWeight: 600 }}>Current balance</span>
+            <span style={{ fontWeight: 800, color: detailBalance > 0 ? "#c0392b" : "#27ae60", fontSize: 18 }}>{fmt(detailBalance)}</span>
+          </div>
+          {detailRows.length === 0 ? <div style={{ fontSize: 13, color: "#8a93a8" }}>No entries yet.</div> :
+            detailRows.map((a) => (
+              <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid #eef1f7" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: a.kind === "advance" ? "#c0392b" : "#27ae60" }}>
+                    {a.kind === "advance" ? "+" : "−"}{fmt(a.amount)}
+                    <span style={{ fontSize: 11, fontWeight: 400, color: "#8a93a8", marginLeft: 8 }}>{a.kind === "advance" ? "Advance" : "Deducted"}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#8a93a8" }}>{a.date}{a.note ? ` · ${a.note}` : ""}</div>
+                </div>
+                {a.kind === "advance" && (
+                  <button onClick={() => deleteAdvance(a.id)} style={delBtn}><Trash2 size={15} /></button>
+                )}
+              </div>
+            ))}
+        </Modal>
+      )}
+    </>
+  );
+}
+
 // ---------- expenses ----------
-function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
+function Expenses({ expenses, setExpenses, advances, setAdvances, categories = EXPENSE_CATEGORIES }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
-  const blankForm = () => ({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "" });
+  const blankForm = () => ({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "", employee: EMPLOYEES[0], deduction: "0" });
   const [form, setForm] = useState(blankForm());
 
   const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
   const openEdit = (e) => {
     setEditingId(e.id);
-    setForm({ date: e.date || todayStr(), category: e.category || categories[0], amount: String(e.amount ?? ""), note: e.note || "" });
+    setForm({ date: e.date || todayStr(), category: e.category || categories[0], amount: String(e.amount ?? ""), note: e.note || "", employee: EMPLOYEES[0], deduction: "0" });
     setShowForm(true);
   };
 
+  const isSalary = form.category === "Salary";
+  const empBal = isSalary ? empBalance(advances, form.employee) : 0;
+  const deductAmt = Math.min(Number(form.deduction) || 0, empBal);
+  const cashToPay = Number(form.amount) - deductAmt;
+
   const save = async () => {
     if (!form.amount) return;
-    const row = { date: form.date, category: form.category, amount: Number(form.amount), note: form.note };
+    const note = isSalary ? form.employee : form.note;
+    const row = { date: form.date, category: form.category, amount: Number(form.amount), note };
     if (editingId) {
-      if (await updateRow("expenses", editingId, row)) {
+      if (await updateRow("expenses", editingId, row))
         setExpenses(expenses.map((e) => e.id === editingId ? { ...e, ...row } : e));
-      }
     } else {
       const saved = await insertRow("expenses", row);
-      if (saved) setExpenses([saved, ...expenses]);
+      if (!saved) return;
+      setExpenses([saved, ...expenses]);
+      // If salary with deduction, create advances deduction row
+      if (isSalary && deductAmt > 0) {
+        const advRow = { employee: form.employee, kind: "deduction", amount: deductAmt, date: form.date, note: `Salary deduction`, expense_id: saved.id };
+        const savedAdv = await insertRow("advances", advRow);
+        if (savedAdv) setAdvances([savedAdv, ...advances]);
+      }
     }
     setForm(blankForm()); setEditingId(null); setShowForm(false);
   };
+
   const remove = async (id) => {
+    // Delete any linked advance deduction rows first
+    const linked = advances.filter((a) => a.expense_id === id);
+    for (const a of linked) await deleteRow("advances", a.id);
+    if (linked.length > 0) setAdvances(advances.filter((a) => a.expense_id !== id));
     if (await deleteRow("expenses", id)) setExpenses(expenses.filter((e) => e.id !== id));
   };
 
@@ -635,11 +756,8 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
   const months = monthsFrom(expenses);
 
-  // category breakdown for the current month/search selection
   const breakdown = (() => {
-    const inScope = expenses.filter((e) =>
-      (filterMonth === "All" || (e.date || "").startsWith(filterMonth))
-    );
+    const inScope = expenses.filter((e) => filterMonth === "All" || (e.date || "").startsWith(filterMonth));
     const map = {};
     inScope.forEach((e) => { map[e.category] = (map[e.category] || 0) + Number(e.amount); });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
@@ -649,8 +767,11 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
   return (
     <div>
       <SectionHeader title="Expenses" onAdd={openAdd} onExport={() => exportCSV("expenses.csv", expenses)} />
+
+      <AdvancesPanel advances={advances} setAdvances={setAdvances} />
+
       <div style={{ position: "relative", marginBottom: 10 }}>
-        <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
+        <Search size={17} style={{ position: "absolute", left: 11, top: 13, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes or category" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
       <MonthFilter months={months} value={filterMonth} onChange={setFilterMonth} />
@@ -702,21 +823,48 @@ function Expenses({ expenses, setExpenses, categories = EXPENSE_CATEGORIES }) {
         <Modal title={editingId ? "Edit expense" : "Add expense"} onClose={() => { setShowForm(false); setEditingId(null); }}>
           <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inputStyle} /></Field>
           <Field label="Category">
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value, deduction: "0" })} style={inputStyle}>
               {categories.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Field>
-          <Field label="Amount"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field>
-          {form.category === "Salary" ? (
-            <Field label="Employee">
-              <input list="employees" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Select or type employee name" style={inputStyle} />
-              <datalist id="employees">
-                {EMPLOYEES.map((n) => <option key={n} value={n} />)}
-              </datalist>
-            </Field>
+          <Field label={isSalary ? "Gross salary" : "Amount"}>
+            <input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} />
+          </Field>
+
+          {isSalary ? (
+            <>
+              <Field label="Employee">
+                <select value={form.employee} onChange={(e) => setForm({ ...form, employee: e.target.value, deduction: "0" })} style={inputStyle}>
+                  {EMPLOYEES.map((n) => <option key={n}>{n}</option>)}
+                </select>
+              </Field>
+              {empBal > 0 && !editingId && (
+                <Field label={`Deduct from advance (owes ${fmt(empBal)})`}>
+                  <input type="number" inputMode="decimal" value={form.deduction}
+                    onChange={(e) => setForm({ ...form, deduction: String(Math.min(Number(e.target.value) || 0, empBal)) })}
+                    placeholder="0" style={inputStyle} />
+                </Field>
+              )}
+              {form.amount && (
+                <div style={{ background: "#eef1f7", borderRadius: 10, padding: "12px 14px", marginBottom: 14, fontSize: 13 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span>Gross salary</span><span style={{ fontWeight: 700 }}>{fmt(form.amount)}</span>
+                  </div>
+                  {deductAmt > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#c0392b" }}>
+                      <span>Deduct advance</span><span style={{ fontWeight: 700 }}>− {fmt(deductAmt)}</span>
+                    </div>
+                  )}
+                  <div style={{ borderTop: "1px solid #cdd6e6", paddingTop: 6, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+                    <span>Cash to pay</span><span style={{ color: "#1e3a5f", fontSize: 15 }}>{fmt(cashToPay)}</span>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. 50kg cattle feed" style={inputStyle} /></Field>
           )}
+
           <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update expense" : "Save expense"}</button>
         </Modal>
       )}
