@@ -208,17 +208,18 @@ function FarmApp({ session, onSignOut }) {
   const [vendors, setVendors] = useState([]);
   const [bills, setBills] = useState([]);
   const [advances, setAdvances] = useState([]);
+  const [notices, setNotices] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
       fetchTable("categories"), fetchTable("vendors"),
-      fetchTable("bills"), fetchTable("advances"),
+      fetchTable("bills"), fetchTable("advances"), fetchTable("notices"),
     ]);
-    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv);
+    setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setLoading(false);
   };
 
@@ -307,7 +308,7 @@ function FarmApp({ session, onSignOut }) {
       </header>
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "14px 14px" }}>
-        {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, setTab }} />}
+        {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab }} />}
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses, advances, setAdvances }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
@@ -392,7 +393,7 @@ function Empty({ icon: Icon, text }) {
 }
 
 // ---------- dashboard ----------
-function Dashboard({ expenses, construction, medicines, vaccinations, milk, bills, setTab }) {
+function Dashboard({ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab }) {
   const today = todayStr();
   const thisMonth = today.slice(0, 7);
 
@@ -461,9 +462,62 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
     </div>
   );
 
+  // Delivery window: pregnant animals with due_date within 14 days from now
+  const deliveryAlerts = (animals || []).filter((a) => {
+    if (a.status !== "Pregnant" || !a.due_date) return false;
+    const days = daysUntil(a.due_date);
+    return days >= 0 && days <= 14;
+  });
+
+  const [noticeText, setNoticeText] = useState("");
+  const [savingNotice, setSavingNotice] = useState(false);
+
+  const addNotice = async () => {
+    const txt = noticeText.trim();
+    if (!txt) return;
+    setSavingNotice(true);
+    const saved = await insertRow("notices", { message: txt });
+    if (saved) { setNotices([saved, ...(notices || [])]); setNoticeText(""); }
+    setSavingNotice(false);
+  };
+
+  const removeNotice = async (id) => {
+    if (!window.confirm("Delete this notice?")) return;
+    if (await deleteRow("notices", id)) setNotices((notices || []).filter((n) => n.id !== id));
+  };
+
   return (
     <div>
       <h2 style={{ margin: "0 0 14px", fontSize: 19, fontWeight: 700 }}>Overview</h2>
+
+      {/* Delivery window blinking alerts */}
+      {deliveryAlerts.map((a) => (
+        <div key={a.id} className="delivery-blink" style={{ border: "2px solid #f0c040", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }}>🐄</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#7a5800" }}>Delivery window — {a.tag}</div>
+            <div style={{ fontSize: 13, color: "#9a6700" }}>Due {new Date(a.due_date).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · {daysUntil(a.due_date) === 0 ? "Today!" : `${daysUntil(a.due_date)} day${daysUntil(a.due_date) !== 1 ? "s" : ""} away`}</div>
+          </div>
+        </div>
+      ))}
+
+      {/* Pinned notices */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15, display: "flex", alignItems: "center", gap: 7 }}>
+          📌 Pinned notices
+        </div>
+        {(notices || []).length === 0 && <div style={{ fontSize: 13, color: "#9aa89e", marginBottom: 10 }}>No pinned notices yet.</div>}
+        {(notices || []).map((n) => (
+          <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, background: "#f8f9fc", borderRadius: 10, padding: "9px 12px" }}>
+            <div style={{ flex: 1, fontSize: 13, color: "#2d3a4a", lineHeight: 1.5 }}>{n.message}</div>
+            <button onClick={() => removeNotice(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c0392b", fontSize: 16, padding: "0 2px", lineHeight: 1 }}>×</button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <input value={noticeText} onChange={(e) => setNoticeText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addNotice()} placeholder="Add a notice…" style={{ ...inputStyle, flex: 1, padding: "10px 12px" }} />
+          <button onClick={addNotice} disabled={savingNotice || !noticeText.trim()} style={{ ...primaryBtn, padding: "10px 16px" }}>Add</button>
+        </div>
+      </div>
 
       {/* Stat cards */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
@@ -1428,19 +1482,19 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
   const [query, setQuery] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [selected, setSelected] = useState(null);
-  const blankForm = () => ({ tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", note: "" });
+  const blankForm = () => ({ tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", due_date: "", note: "" });
   const [form, setForm] = useState(blankForm());
 
   const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
   const openEdit = (a) => {
     setEditingId(a.id);
-    setForm({ tag: a.tag || "", type: a.type || types[0], breed: a.breed || "", dob: a.dob || "", status: a.status || statuses[0], note: a.note || "" });
+    setForm({ tag: a.tag || "", type: a.type || types[0], breed: a.breed || "", dob: a.dob || "", status: a.status || statuses[0], due_date: a.due_date || "", note: a.note || "" });
     setShowForm(true);
   };
 
   const save = async () => {
     if (!form.tag) return;
-    const row = { tag: form.tag, type: form.type, breed: form.breed, dob: form.dob || null, status: form.status, note: form.note };
+    const row = { tag: form.tag, type: form.type, breed: form.breed, dob: form.dob || null, status: form.status, due_date: form.status === "Pregnant" ? (form.due_date || null) : null, note: form.note };
     if (editingId) {
       if (await updateRow("animals", editingId, row)) {
         setAnimals(animals.map((a) => a.id === editingId ? { ...a, ...row } : a));
@@ -1471,6 +1525,9 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
           {statuses.map((s) => <option key={s}>{s}</option>)}
         </select>
       </Field>
+      {form.status === "Pregnant" && (
+        <Field label="Expected due date"><input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} style={inputStyle} /></Field>
+      )}
       <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
       <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update animal" : "Save animal"}</button>
     </Modal>
