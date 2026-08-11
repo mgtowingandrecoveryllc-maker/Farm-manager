@@ -476,7 +476,7 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
     const txt = noticeText.trim();
     if (!txt) return;
     setSavingNotice(true);
-    const saved = await insertRow("notices", { message: txt });
+    const saved = await insertRow("notices", { title: txt, body: txt });
     if (saved) { setNotices([saved, ...(notices || [])]); setNoticeText(""); }
     setSavingNotice(false);
   };
@@ -509,7 +509,7 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
         {(notices || []).length === 0 && <div style={{ fontSize: 13, color: "#9aa89e", marginBottom: 10 }}>No pinned notices yet.</div>}
         {(notices || []).map((n) => (
           <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, background: "#f8f9fc", borderRadius: 10, padding: "9px 12px" }}>
-            <div style={{ flex: 1, fontSize: 13, color: "#2d3a4a", lineHeight: 1.5 }}>{n.message}</div>
+            <div style={{ flex: 1, fontSize: 13, color: "#2d3a4a", lineHeight: 1.5 }}>{n.title || n.body}</div>
             <button onClick={() => removeNotice(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c0392b", fontSize: 16, padding: "0 2px", lineHeight: 1 }}>×</button>
           </div>
         ))}
