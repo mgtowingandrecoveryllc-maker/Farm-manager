@@ -209,17 +209,22 @@ function FarmApp({ session, onSignOut }) {
   const [bills, setBills] = useState([]);
   const [advances, setAdvances] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [weights, setWeights] = useState([]);
+  const [breedingRecs, setBreedingRecs] = useState([]);
+  const [inspections, setInspections] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
       fetchTable("categories"), fetchTable("vendors"),
       fetchTable("bills"), fetchTable("advances"), fetchTable("notices"),
+      fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
+    setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setLoading(false);
   };
 
@@ -312,7 +317,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses, advances, setAdvances }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
-        {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
+        {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
         {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
@@ -1464,7 +1469,8 @@ function AnimalField({ label, value, onChange, animals, placeholder }) {
 
 // ---------- animals ----------
 const ANIMAL_TYPES = ["Cow", "Buffalo", "Horse", "Goat"];
-const ANIMAL_STATUSES = ["Active", "Pregnant", "Dry", "Sold", "Deceased"];
+const ANIMAL_STATUSES = ["Active", "Pregnant", "Dry", "Sold", "Deceased", "Slaughtered", "Died", "Culled", "Disposed", "Given away"];
+const INACTIVE_STATUSES = new Set(["Sold", "Deceased", "Slaughtered", "Died", "Culled", "Disposed", "Given away"]);
 
 function ageFromDob(dob) {
   if (!dob) return null;
@@ -1476,25 +1482,40 @@ function ageFromDob(dob) {
   return `${months}m`;
 }
 
-function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = ANIMAL_TYPES, statuses = ANIMAL_STATUSES }) {
+function Animals({ animals, setAnimals, milk, vaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, types = ANIMAL_TYPES, statuses = ANIMAL_STATUSES }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
   const [filterType, setFilterType] = useState("All");
+  const [herdFilter, setHerdFilter] = useState("active");
   const [selected, setSelected] = useState(null);
-  const blankForm = () => ({ tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", due_date: "", note: "" });
+
+  const blankForm = () => ({ tag: "", type: types[0] || "Cow", breed: "", dob: "", status: statuses[0] || "Active", due_date: "", note: "", sex: "", mother_tag: "", group_code: "", teeth: "", grade: "", exit_date: "", exit_reason: "" });
   const [form, setForm] = useState(blankForm());
 
   const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
   const openEdit = (a) => {
     setEditingId(a.id);
-    setForm({ tag: a.tag || "", type: a.type || types[0], breed: a.breed || "", dob: a.dob || "", status: a.status || statuses[0], due_date: a.due_date || "", note: a.note || "" });
+    setForm({ tag: a.tag || "", type: a.type || types[0], breed: a.breed || "", dob: a.dob || "", status: a.status || statuses[0], due_date: a.due_date || "", note: a.note || "", sex: a.sex || "", mother_tag: a.mother_tag || "", group_code: a.group_code || "", teeth: a.teeth || "", grade: a.grade || "", exit_date: a.exit_date || "", exit_reason: a.exit_reason || "" });
     setShowForm(true);
   };
 
   const save = async () => {
     if (!form.tag) return;
-    const row = { tag: form.tag, type: form.type, breed: form.breed, dob: form.dob || null, status: form.status, due_date: form.status === "Pregnant" ? (form.due_date || null) : null, note: form.note };
+    const isGoat = form.type === "Goat";
+    const isInactive = INACTIVE_STATUSES.has(form.status);
+    const row = {
+      tag: form.tag, type: form.type, breed: form.breed, dob: form.dob || null,
+      status: form.status, note: form.note,
+      due_date: form.status === "Pregnant" ? (form.due_date || null) : null,
+      sex: isGoat ? (form.sex || null) : null,
+      mother_tag: isGoat ? (form.mother_tag || null) : null,
+      group_code: isGoat ? (form.group_code || null) : null,
+      teeth: isGoat ? (form.teeth || null) : null,
+      grade: isGoat ? (form.grade || null) : null,
+      exit_date: isInactive ? (form.exit_date || null) : null,
+      exit_reason: isInactive ? (form.exit_reason || null) : null,
+    };
     if (editingId) {
       if (await updateRow("animals", editingId, row)) {
         setAnimals(animals.map((a) => a.id === editingId ? { ...a, ...row } : a));
@@ -1510,15 +1531,30 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
     if (await deleteRow("animals", id)) { setAnimals(animals.filter((a) => a.id !== id)); setSelected(null); }
   };
 
+  const isGoatForm = form.type === "Goat";
+  const isInactiveStatus = INACTIVE_STATUSES.has(form.status);
+
   const animalFormModal = (
     <Modal title={editingId ? "Edit animal" : "Register animal"} onClose={() => { setShowForm(false); setEditingId(null); }}>
-      <Field label="Tag ID / name"><input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="e.g. Cow #12" style={inputStyle} /></Field>
+      <Field label="Tag ID / name"><input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="e.g. 007" style={inputStyle} /></Field>
       <Field label="Type">
         <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
           {types.map((t) => <option key={t}>{t}</option>)}
         </select>
       </Field>
-      <Field label="Breed (optional)"><input value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} placeholder="e.g. Sahiwal" style={inputStyle} /></Field>
+      <Field label={isGoatForm ? "Color / breed" : "Breed (optional)"}><input value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} placeholder={isGoatForm ? "e.g. Makhichina, Brown, Beetal" : "e.g. Sahiwal"} style={inputStyle} /></Field>
+      {isGoatForm && <>
+        <Field label="Sex">
+          <select value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value })} style={inputStyle}>
+            <option value="">— select —</option>
+            <option>Female</option><option>Male</option>
+          </select>
+        </Field>
+        <Field label="Mother tag (optional)"><input value={form.mother_tag} onChange={(e) => setForm({ ...form, mother_tag: e.target.value })} placeholder="e.g. 003" style={inputStyle} /></Field>
+        <Field label="Group code (optional)"><input value={form.group_code} onChange={(e) => setForm({ ...form, group_code: e.target.value })} placeholder="e.g. P-23, F-24" style={inputStyle} /></Field>
+        <Field label="Teeth (optional)"><input value={form.teeth} onChange={(e) => setForm({ ...form, teeth: e.target.value })} placeholder="e.g. 4xTeeth, Kid" style={inputStyle} /></Field>
+        <Field label="Grade (optional)"><input value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="e.g. A, B+" style={inputStyle} /></Field>
+      </>}
       <Field label="Date of birth (optional)"><input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} style={inputStyle} /></Field>
       <Field label="Status">
         <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}>
@@ -1528,70 +1564,26 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
       {form.status === "Pregnant" && (
         <Field label="Expected due date"><input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} style={inputStyle} /></Field>
       )}
+      {isInactiveStatus && <>
+        <Field label="Exit date (optional)"><input type="date" value={form.exit_date} onChange={(e) => setForm({ ...form, exit_date: e.target.value })} style={inputStyle} /></Field>
+        <Field label="Exit reason (optional)"><input value={form.exit_reason} onChange={(e) => setForm({ ...form, exit_reason: e.target.value })} placeholder="e.g. sold to Ali, disease" style={inputStyle} /></Field>
+      </>}
       <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
       <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update animal" : "Save animal"}</button>
     </Modal>
   );
 
-  const filtered = animals.filter((a) =>
+  const activeAnimals = animals.filter((a) => !INACTIVE_STATUSES.has(a.status));
+  const inactiveAnimals = animals.filter((a) => INACTIVE_STATUSES.has(a.status));
+  const herdPool = herdFilter === "active" ? activeAnimals : inactiveAnimals;
+  const filtered = herdPool.filter((a) =>
     (filterType === "All" || a.type === filterType) &&
-    (a.tag.toLowerCase().includes(query.toLowerCase()) || (a.breed || "").toLowerCase().includes(query.toLowerCase()))
+    ((a.tag || "").toLowerCase().includes(query.toLowerCase()) || (a.breed || "").toLowerCase().includes(query.toLowerCase()))
   );
 
   // profile view
   if (selected) {
-    const a = animals.find((x) => x.id === selected.id) || selected;
-    const myMilk = milk.filter((m) => m.animal === a.tag);
-    const myVax = vaccinations.filter((v) => v.animal === a.tag);
-    const totalMilk = myMilk.reduce((s, m) => s + Number(m.litres), 0);
-    return (
-      <div>
-        <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#1e3a5f", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← All animals</button>
-        <div style={{ ...card }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{a.tag}</div>
-              <div style={{ fontSize: 13, color: "#7a8c7f", marginTop: 3 }}>
-                {a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)} old` : ""}
-              </div>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#1e3a5f", background: "#eef1f7", padding: "4px 10px", borderRadius: 8 }}>{a.status || "Active"}</span>
-          </div>
-          {a.note && <div style={{ fontSize: 13, color: "#5a6e60", marginTop: 10 }}>{a.note}</div>}
-        </div>
-
-        <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-          <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Total milk</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{fmt(totalMilk)} L</div>
-          </div>
-          <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "#7a8c7f", fontWeight: 600 }}>Vaccinations</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{myVax.length}</div>
-          </div>
-        </div>
-
-        <div style={{ ...card }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Vaccination history</div>
-          {myVax.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
-            myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next ${v.next_due}` : ""}</div>)}
-        </div>
-
-        <div style={{ ...card }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Recent milk</div>
-          {myMilk.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
-            myMilk.slice(0, 10).map((m) => <div key={m.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{m.date} · {m.session} · {fmt(m.litres)} L</div>)}
-        </div>
-
-        <button onClick={() => openEdit(a)} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, marginBottom: 10 }}>
-          Edit this animal
-        </button>
-        <button onClick={() => remove(a.id)} style={{ ...delBtn, width: "100%", padding: "12px", display: "flex", justifyContent: "center", gap: 8, alignItems: "center" }}>
-          <Trash2 size={18} /> Remove this animal
-        </button>
-        {showForm && animalFormModal}
-      </div>
-    );
+    return <AnimalProfile {...{ a: animals.find((x) => x.id === selected.id) || selected, animals, setAnimals, milk, vaccinations, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, openEdit, remove, showForm, animalFormModal, setSelected }} />;
   }
 
   // list view
@@ -1602,6 +1594,13 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
         <Search size={17} style={{ position: "absolute", left: 11, top: 12, color: "#9aa89e" }} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tag or breed" style={{ ...inputStyle, paddingLeft: 36 }} />
       </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {["active", "inactive"].map((h) => (
+          <button key={h} onClick={() => setHerdFilter(h)} style={{ flex: 1, border: "1px solid #cdd6e6", borderRadius: 10, padding: "9px 6px", fontSize: 13, fontWeight: 700, cursor: "pointer", background: herdFilter === h ? "#1e3a5f" : "white", color: herdFilter === h ? "white" : "#3a4a3f" }}>
+            {h === "active" ? `Active (${activeAnimals.length})` : `Inactive (${inactiveAnimals.length})`}
+          </button>
+        ))}
+      </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
         {["All", ...types].map((c) => (
           <button key={c} onClick={() => setFilterType(c)} style={{
@@ -1611,19 +1610,230 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, types = A
         ))}
       </div>
 
-      {filtered.length === 0 ? <Empty icon={PawPrint} text="No animals yet. Tap Add to register one." /> :
+      {filtered.length === 0 ? <Empty icon={PawPrint} text={herdFilter === "active" ? "No active animals." : "No inactive animals."} /> :
         filtered.map((a) => (
           <div key={a.id} onClick={() => setSelected(a)} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{a.tag}</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{a.tag}{a.sex ? <span style={{ fontSize: 11, color: "#9aa89e", marginLeft: 6 }}>{a.sex === "Female" ? "♀" : "♂"}</span> : null}</div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>
-                {a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)}` : ""}
+                {a.type}{a.breed ? ` · ${a.breed}` : ""}{a.group_code ? ` · ${a.group_code}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)}` : ""}
               </div>
+              {herdFilter === "inactive" && a.exit_date && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 2 }}>{a.exit_date}{a.exit_reason ? ` · ${a.exit_reason}` : ""}</div>}
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#1e3a5f", background: "#eef1f7", padding: "3px 9px", borderRadius: 7 }}>{a.status || "Active"}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: INACTIVE_STATUSES.has(a.status) ? "#c0392b" : "#1e3a5f", background: INACTIVE_STATUSES.has(a.status) ? "#fdf0f0" : "#eef1f7", padding: "3px 9px", borderRadius: 7 }}>{a.status || "Active"}</span>
           </div>
         ))}
 
+      {showForm && animalFormModal}
+    </div>
+  );
+}
+
+// ---------- animal profile (weights, breeding, inspections) ----------
+function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, openEdit, remove, showForm, animalFormModal, setSelected }) {
+  const myMilk = milk.filter((m) => m.animal === a.tag);
+  const myVax = vaccinations.filter((v) => v.animal === a.tag);
+  const myWeights = weights.filter((w) => w.animal_tag === a.tag).sort((x, y) => x.date > y.date ? 1 : -1);
+  const myBreeding = breedingRecs.filter((b) => b.animal_tag === a.tag).sort((x, y) => (x.cycle_no || 0) - (y.cycle_no || 0));
+  const myInspections = inspections.filter((i) => i.animal_tag === a.tag).sort((x, y) => x.date < y.date ? 1 : -1);
+  const totalMilk = myMilk.reduce((s, m) => s + Number(m.litres), 0);
+  const latestWeight = myWeights[myWeights.length - 1];
+  const prevWeight = myWeights[myWeights.length - 2];
+  const weightDelta = latestWeight && prevWeight ? (Number(latestWeight.weight_kg) - Number(prevWeight.weight_kg)).toFixed(1) : null;
+
+  // Weight form
+  const [showWF, setShowWF] = useState(false);
+  const [wForm, setWForm] = useState({ date: todayStr(), weight_kg: "", note: "" });
+  const saveWeight = async () => {
+    if (!wForm.weight_kg) return;
+    const saved = await insertRow("weights", { animal_tag: a.tag, date: wForm.date, weight_kg: Number(wForm.weight_kg), note: wForm.note || null });
+    if (saved) { setWeights([saved, ...weights]); setShowWF(false); setWForm({ date: todayStr(), weight_kg: "", note: "" }); }
+  };
+  const removeWeight = async (id) => { if (await deleteRow("weights", id)) setWeights(weights.filter((w) => w.id !== id)); };
+
+  // Breeding form
+  const [showBF, setShowBF] = useState(false);
+  const [bForm, setBForm] = useState({ cycle_no: "", delivery_date: "", kids_born: "", kids_survived: "", kid_tags: "", outcome: "", remarks: "" });
+  const saveBreeding = async () => {
+    const saved = await insertRow("breeding", { animal_tag: a.tag, cycle_no: bForm.cycle_no ? Number(bForm.cycle_no) : null, delivery_date: bForm.delivery_date || null, kids_born: bForm.kids_born ? Number(bForm.kids_born) : null, kids_survived: bForm.kids_survived ? Number(bForm.kids_survived) : null, kid_tags: bForm.kid_tags || null, outcome: bForm.outcome || null, remarks: bForm.remarks || null });
+    if (saved) { setBreedingRecs([saved, ...breedingRecs]); setShowBF(false); setBForm({ cycle_no: "", delivery_date: "", kids_born: "", kids_survived: "", kid_tags: "", outcome: "", remarks: "" }); }
+  };
+  const removeBreeding = async (id) => { if (await deleteRow("breeding", id)) setBreedingRecs(breedingRecs.filter((b) => b.id !== id)); };
+
+  // Inspection form
+  const [showIF, setShowIF] = useState(false);
+  const [iForm, setIForm] = useState({ date: todayStr(), weight_kg: "", famacha: "", coat: "", hoofs: "", deworming: "", observation: "", remarks: "" });
+  const saveInspection = async () => {
+    if (!iForm.date) return;
+    const saved = await insertRow("inspections", { animal_tag: a.tag, date: iForm.date, weight_kg: iForm.weight_kg ? Number(iForm.weight_kg) : null, famacha: iForm.famacha || null, coat: iForm.coat || null, hoofs: iForm.hoofs || null, deworming: iForm.deworming || null, observation: iForm.observation || null, remarks: iForm.remarks || null });
+    if (saved) { setInspections([saved, ...inspections]); setShowIF(false); setIForm({ date: todayStr(), weight_kg: "", famacha: "", coat: "", hoofs: "", deworming: "", observation: "", remarks: "" }); }
+  };
+  const removeInspection = async (id) => { if (await deleteRow("inspections", id)) setInspections(inspections.filter((i) => i.id !== id)); };
+
+  const isGoat = a.type === "Goat";
+  const isInactive = INACTIVE_STATUSES.has(a.status);
+  const delBtn2 = { background: "none", border: "none", cursor: "pointer", color: "#c0392b", padding: "2px 4px", fontSize: 13 };
+
+  return (
+    <div>
+      <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#1e3a5f", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← All animals</button>
+
+      {/* Header card */}
+      <div style={{ ...card }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800 }}>{a.tag}{a.sex ? <span style={{ fontSize: 15, color: "#9aa89e", marginLeft: 8 }}>{a.sex === "Female" ? "♀" : "♂"}</span> : null}</div>
+            <div style={{ fontSize: 13, color: "#7a8c7f", marginTop: 3 }}>{a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)} old` : ""}</div>
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, color: isInactive ? "#c0392b" : "#1e3a5f", background: isInactive ? "#fdf0f0" : "#eef1f7", padding: "4px 10px", borderRadius: 8 }}>{a.status || "Active"}</span>
+        </div>
+        {isGoat && (a.mother_tag || a.group_code || a.teeth || a.grade) && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 10 }}>
+            {a.mother_tag && <span style={{ fontSize: 12, color: "#5a6478" }}>Mother: <b>{a.mother_tag}</b></span>}
+            {a.group_code && <span style={{ fontSize: 12, color: "#5a6478" }}>Group: <b>{a.group_code}</b></span>}
+            {a.teeth && <span style={{ fontSize: 12, color: "#5a6478" }}>Teeth: <b>{a.teeth}</b></span>}
+            {a.grade && <span style={{ fontSize: 12, color: "#5a6478" }}>Grade: <b>{a.grade}</b></span>}
+          </div>
+        )}
+        {isInactive && (a.exit_date || a.exit_reason) && (
+          <div style={{ marginTop: 8, padding: "6px 10px", background: "#fdf0f0", borderRadius: 8, fontSize: 12, color: "#c0392b" }}>
+            {a.exit_date && <span>Exit: {a.exit_date}</span>}{a.exit_reason && <span> · {a.exit_reason}</span>}
+          </div>
+        )}
+        {a.note && <div style={{ fontSize: 13, color: "#5a6e60", marginTop: 10 }}>{a.note}</div>}
+      </div>
+
+      {/* Stat row */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        {latestWeight && (
+          <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Weight</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{latestWeight.weight_kg} kg</div>
+            {weightDelta !== null && <div style={{ fontSize: 11, color: Number(weightDelta) >= 0 ? "#27ae60" : "#c0392b" }}>{Number(weightDelta) >= 0 ? "▲" : "▼"} {Math.abs(weightDelta)} kg</div>}
+          </div>
+        )}
+        <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Total milk</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{fmt(totalMilk)} L</div>
+        </div>
+        <div style={{ ...card, marginBottom: 0, flex: 1, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Vaccinations</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{myVax.length}</div>
+        </div>
+      </div>
+
+      {/* Weights */}
+      <div style={{ ...card }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>Weight records</div>
+          <button onClick={() => setShowWF(!showWF)} style={{ ...primaryBtn, padding: "8px 12px", fontSize: 13 }}><Plus size={15} />Add</button>
+        </div>
+        {showWF && (
+          <div style={{ background: "#f8f9fc", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+            <Field label="Date"><input type="date" value={wForm.date} onChange={(e) => setWForm({ ...wForm, date: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Weight (kg)"><input type="number" inputMode="decimal" value={wForm.weight_kg} onChange={(e) => setWForm({ ...wForm, weight_kg: e.target.value })} placeholder="e.g. 28.5" style={inputStyle} /></Field>
+            <Field label="Note (optional)"><input value={wForm.note} onChange={(e) => setWForm({ ...wForm, note: e.target.value })} style={inputStyle} /></Field>
+            <button onClick={saveWeight} style={{ ...primaryBtn, width: "100%", justifyContent: "center" }}>Save weight</button>
+          </div>
+        )}
+        {myWeights.length === 0 ? <div style={{ fontSize: 13, color: "#8a93a8" }}>No weights recorded.</div> :
+          [...myWeights].reverse().map((w) => (
+            <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>
+              <div style={{ fontSize: 13 }}>{w.date} · <b>{w.weight_kg} kg</b>{w.note ? ` · ${w.note}` : ""}</div>
+              <button onClick={() => removeWeight(w.id)} style={delBtn2}>×</button>
+            </div>
+          ))}
+      </div>
+
+      {/* Breeding (only for female goats or any goat) */}
+      {isGoat && (
+        <div style={{ ...card }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div>
+              <span style={{ fontWeight: 700 }}>Breeding records</span>
+              {myBreeding.length > 0 && <span style={{ fontSize: 12, color: "#7a8c7f", marginLeft: 8 }}>Total kids: {myBreeding.reduce((s, b) => s + (Number(b.kids_born) || 0), 0)} born / {myBreeding.reduce((s, b) => s + (Number(b.kids_survived) || 0), 0)} survived</span>}
+            </div>
+            <button onClick={() => setShowBF(!showBF)} style={{ ...primaryBtn, padding: "8px 12px", fontSize: 13 }}><Plus size={15} />Add</button>
+          </div>
+          {showBF && (
+            <div style={{ background: "#f8f9fc", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <Field label="Cycle no. (BC1, BC2…)"><input type="number" inputMode="numeric" value={bForm.cycle_no} onChange={(e) => setBForm({ ...bForm, cycle_no: e.target.value })} placeholder="1" style={inputStyle} /></Field>
+              <Field label="Delivery date (optional)"><input type="date" value={bForm.delivery_date} onChange={(e) => setBForm({ ...bForm, delivery_date: e.target.value })} style={inputStyle} /></Field>
+              <Field label="Kids born"><input type="number" inputMode="numeric" value={bForm.kids_born} onChange={(e) => setBForm({ ...bForm, kids_born: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+              <Field label="Kids survived"><input type="number" inputMode="numeric" value={bForm.kids_survived} onChange={(e) => setBForm({ ...bForm, kids_survived: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+              <Field label="Kid tags (optional)"><input value={bForm.kid_tags} onChange={(e) => setBForm({ ...bForm, kid_tags: e.target.value })} placeholder="e.g. 1002,1003" style={inputStyle} /></Field>
+              <Field label="Outcome"><input value={bForm.outcome} onChange={(e) => setBForm({ ...bForm, outcome: e.target.value })} placeholder="e.g. twin, single female, miscarriage" style={inputStyle} /></Field>
+              <Field label="Remarks (optional)"><input value={bForm.remarks} onChange={(e) => setBForm({ ...bForm, remarks: e.target.value })} style={inputStyle} /></Field>
+              <button onClick={saveBreeding} style={{ ...primaryBtn, width: "100%", justifyContent: "center" }}>Save cycle</button>
+            </div>
+          )}
+          {myBreeding.length === 0 ? <div style={{ fontSize: 13, color: "#8a93a8" }}>No breeding cycles recorded.</div> :
+            myBreeding.map((b) => (
+              <div key={b.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>BC{b.cycle_no || "?"}{b.delivery_date ? ` · ${b.delivery_date}` : ""}</div>
+                  <button onClick={() => removeBreeding(b.id)} style={delBtn2}>×</button>
+                </div>
+                <div style={{ fontSize: 12, color: "#5a6478" }}>
+                  {b.kids_born != null && `${b.kids_born} born`}{b.kids_survived != null && ` / ${b.kids_survived} survived`}{b.outcome ? ` · ${b.outcome}` : ""}{b.kid_tags ? ` · Tags: ${b.kid_tags}` : ""}{b.remarks ? ` · ${b.remarks}` : ""}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* Health inspections */}
+      <div style={{ ...card }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>Health inspections</div>
+          <button onClick={() => setShowIF(!showIF)} style={{ ...primaryBtn, padding: "8px 12px", fontSize: 13 }}><Plus size={15} />Add</button>
+        </div>
+        {showIF && (
+          <div style={{ background: "#f8f9fc", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+            <Field label="Date"><input type="date" value={iForm.date} onChange={(e) => setIForm({ ...iForm, date: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Weight (kg, optional)"><input type="number" inputMode="decimal" value={iForm.weight_kg} onChange={(e) => setIForm({ ...iForm, weight_kg: e.target.value })} placeholder="e.g. 28.5" style={inputStyle} /></Field>
+            <Field label="Famacha (optional)"><input value={iForm.famacha} onChange={(e) => setIForm({ ...iForm, famacha: e.target.value })} placeholder="e.g. Ok, 1, 2" style={inputStyle} /></Field>
+            <Field label="Coat (optional)"><input value={iForm.coat} onChange={(e) => setIForm({ ...iForm, coat: e.target.value })} placeholder="e.g. Ok, Poor" style={inputStyle} /></Field>
+            <Field label="Hoofs (optional)"><input value={iForm.hoofs} onChange={(e) => setIForm({ ...iForm, hoofs: e.target.value })} placeholder="e.g. Ok, Needs trimming" style={inputStyle} /></Field>
+            <Field label="Deworming (optional)"><input value={iForm.deworming} onChange={(e) => setIForm({ ...iForm, deworming: e.target.value })} placeholder="e.g. Nilworm, Skipped" style={inputStyle} /></Field>
+            <Field label="Observation (optional)"><input value={iForm.observation} onChange={(e) => setIForm({ ...iForm, observation: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Remarks (optional)"><input value={iForm.remarks} onChange={(e) => setIForm({ ...iForm, remarks: e.target.value })} style={inputStyle} /></Field>
+            <button onClick={saveInspection} style={{ ...primaryBtn, width: "100%", justifyContent: "center" }}>Save inspection</button>
+          </div>
+        )}
+        {myInspections.length === 0 ? <div style={{ fontSize: 13, color: "#8a93a8" }}>No inspections recorded.</div> :
+          myInspections.map((i) => (
+            <div key={i.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{i.date}{i.weight_kg ? ` · ${i.weight_kg} kg` : ""}</div>
+                <button onClick={() => removeInspection(i.id)} style={delBtn2}>×</button>
+              </div>
+              <div style={{ fontSize: 12, color: "#5a6478" }}>
+                {[i.famacha && `Famacha: ${i.famacha}`, i.coat && `Coat: ${i.coat}`, i.hoofs && `Hoofs: ${i.hoofs}`, i.deworming && `Deworming: ${i.deworming}`, i.observation, i.remarks].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+          ))}
+      </div>
+
+      {/* Vaccination history */}
+      <div style={{ ...card }}>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Vaccination history</div>
+        {myVax.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
+          myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next ${v.next_due}` : ""}</div>)}
+      </div>
+
+      {/* Recent milk */}
+      {totalMilk > 0 && (
+        <div style={{ ...card }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Recent milk</div>
+          {myMilk.slice(0, 10).map((m) => <div key={m.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{m.date} · {m.session} · {fmt(m.litres)} L</div>)}
+        </div>
+      )}
+
+      <button onClick={() => openEdit(a)} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, marginBottom: 10 }}>Edit this animal</button>
+      <button onClick={() => remove(a.id)} style={{ background: "none", border: "1px solid #e0c8c8", borderRadius: 12, padding: "12px", width: "100%", display: "flex", justifyContent: "center", gap: 8, alignItems: "center", color: "#c0392b", cursor: "pointer", fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+        <Trash2 size={18} /> Remove this animal
+      </button>
       {showForm && animalFormModal}
     </div>
   );
