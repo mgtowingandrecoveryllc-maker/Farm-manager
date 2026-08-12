@@ -285,7 +285,7 @@ function FarmApp({ session, onSignOut }) {
     { id: "dashboard", label: "Home", icon: Home },
     { id: "expenses", label: "Expenses", icon: Wallet },
     { id: "bills", label: "Bills", icon: FileText, badge: profile?.role === "owner" && submittedCount > 0 ? submittedCount : 0 },
-    { id: "construction", label: "Build", icon: Hammer },
+    { id: "medicines", label: "Medicines", icon: Syringe },
     { id: "animals", label: "Animals", icon: PawPrint },
     { id: "reports", label: "Reports", icon: TrendingUp },
   ];
@@ -316,7 +316,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
         {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
-        {tab === "reports" && <Reports {...{ expenses, construction, milk }} />}
+        {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
 
@@ -2420,7 +2420,7 @@ function ReceiptViewer({ path }) {
 }
 
 // ---------- reports: month-by-month totals ----------
-function Reports({ expenses, construction, milk }) {
+function Reports({ expenses, construction, milk, setTab }) {
   const [scope, setScope] = useState("farm"); // farm | build
 
   const rows = scope === "farm" ? expenses : construction;
@@ -2449,6 +2449,11 @@ function Reports({ expenses, construction, milk }) {
             background: scope === k ? "#1e3a5f" : "white", color: scope === k ? "white" : "#3a4a3f",
           }}>{label}</button>
         ))}
+        {scope === "build" && (
+          <button onClick={() => setTab("construction")} style={{ border: "1px solid #1c5fa8", borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", background: "#eef3fb", color: "#1c5fa8", whiteSpace: "nowrap" }}>
+            <Hammer size={14} style={{ verticalAlign: "middle", marginRight: 4 }} />Add entry
+          </button>
+        )}
       </div>
 
       <div style={{ ...card, background: "#eef1f7" }}>
