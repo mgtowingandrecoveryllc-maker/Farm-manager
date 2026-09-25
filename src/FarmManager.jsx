@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
   TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint, Settings as SettingsIcon,
-  FileText, CheckCircle, XCircle, Clock, Camera
+  FileText, CheckCircle, XCircle, Clock, Camera, Package
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -214,10 +214,11 @@ function FarmApp({ session, onSignOut }) {
   const [inspections, setInspections] = useState([]);
   const [billItems, setBillItems] = useState([]);
   const [billItemNames, setBillItemNames] = useState([]);
+  const [rationLog, setRationLog] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -225,10 +226,11 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("bills"), fetchTable("advances"), fetchTable("notices"),
       fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
       fetchTable("bill_items"), fetchTable("bill_item_names"),
+      fetchTable("ration_log"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
-    setBillItems(bi); setBillItemNames(bin);
+    setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
     setLoading(false);
   };
 
@@ -296,6 +298,7 @@ function FarmApp({ session, onSignOut }) {
     { id: "bills", label: "Bills", icon: FileText, badge: profile?.role === "owner" && submittedCount > 0 ? submittedCount : 0 },
     { id: "medicines", label: "Medicines", icon: Syringe },
     { id: "animals", label: "Animals", icon: PawPrint },
+    { id: "ration", label: "Ration", icon: Package },
     { id: "reports", label: "Reports", icon: TrendingUp },
   ];
 
@@ -324,7 +327,8 @@ function FarmApp({ session, onSignOut }) {
         {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
-        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
+        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses, rationLog, setRationLog }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
+        {tab === "ration" && <RationInventory rationLog={rationLog} setRationLog={setRationLog} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -1473,6 +1477,7 @@ function AnimalField({ label, value, onChange, animals, placeholder }) {
 
 // ---------- animals ----------
 const ANIMAL_TYPES = ["Cow", "Buffalo", "Horse", "Goat"];
+const RATION_CATEGORIES = new Set(["Ration", "Animal Feed", "Feed", "Fodder", "Grain", "Silage"]);
 const ANIMAL_STATUSES = ["Active", "Pregnant", "Dry", "Sold", "Deceased", "Slaughtered", "Died", "Culled", "Disposed", "Given away"];
 const INACTIVE_STATUSES = new Set(["Sold", "Deceased", "Slaughtered", "Died", "Culled", "Disposed", "Given away"]);
 
@@ -2097,7 +2102,7 @@ async function sendUnpaidToWhatsApp(bills) {
 const statusColor = { submitted: "#c79a2e", approved: "#1c5fa8", rejected: "#c0392b", paid: "#27ae60" };
 const statusBg = { submitted: "#fff8e6", approved: "#eef3fb", rejected: "#fbeaea", paid: "#eafaf1" };
 
-function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses }) {
+function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses, rationLog, setRationLog }) {
   const role = profile?.role || "accountant";
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterScope, setFilterScope] = useState("All");
@@ -2219,7 +2224,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     if (error) { alert("Could not mark paid: " + error.message); setUploading(false); return; }
     setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
     const items = billItems.filter((it) => it.bill_id === b.id);
-    const itemsToPost = items.length > 0 ? items : [{ category: b.category, item: b.item, amount: b.amount }];
+    const itemsToPost = items.length > 0 ? items : [{ category: b.category, item: b.item, amount: b.amount, quantity: b.quantity }];
     const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "";
     for (const it of itemsToPost) {
       if (!it.amount) continue;
@@ -2231,6 +2236,14 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
       };
       const expSaved = await insertRow("expenses", expRow);
       if (expSaved) setExpenses((prev) => [expSaved, ...prev]);
+      if (RATION_CATEGORIES.has(it.category || b.category)) {
+        const qtyMatch = String(it.quantity || "").match(/^(\d+\.?\d*)\s*(.*)?/);
+        const qtyNum = qtyMatch ? Number(qtyMatch[1]) : 0;
+        const unit = qtyMatch ? (qtyMatch[2] || "").trim() : (it.quantity || "");
+        const rlRow = { item_name: it.item || "Unknown", category: it.category || b.category, kind: "in", quantity: qtyNum, unit: unit || null, date: paidForm.paid_at || todayStr(), note: `From bill: ${vendorLabel}${b.bill_no ? ` #${b.bill_no}` : ""}`, bill_id: b.id };
+        const rlSaved = await insertRow("ration_log", rlRow);
+        if (rlSaved) setRationLog((prev) => [rlSaved, ...prev]);
+      }
     }
     setUploading(false); setShowPaid(false); setSelected(null);
   };
@@ -2750,6 +2763,105 @@ function ReceiptViewer({ path }) {
   return (
     <div style={{ ...card, padding: 8, marginBottom: 14 }}>
       <img src={url} alt="Receipt" style={{ width: "100%", borderRadius: 8, display: "block" }} />
+    </div>
+  );
+}
+
+// ---------- ration inventory ----------
+function RationInventory({ rationLog, setRationLog }) {
+  const [showUseForm, setShowUseForm] = useState(false);
+  const [useForm, setUseForm] = useState({ item_name: "", category: "Ration", quantity: "", unit: "", note: "", date: todayStr() });
+  const [saving, setSaving] = useState(false);
+
+  // Build per-item stock summary
+  const stock = {};
+  for (const row of rationLog) {
+    const key = row.item_name;
+    if (!stock[key]) stock[key] = { item_name: row.item_name, category: row.category, in_qty: 0, out_qty: 0, unit: row.unit || "", last_in: null, last_out: null };
+    if (row.kind === "in") { stock[key].in_qty += Number(row.quantity || 0); stock[key].last_in = stock[key].last_in ? (row.date > stock[key].last_in ? row.date : stock[key].last_in) : row.date; if (row.unit) stock[key].unit = row.unit; }
+    if (row.kind === "out") { stock[key].out_qty += Number(row.quantity || 0); stock[key].last_out = stock[key].last_out ? (row.date > stock[key].last_out ? row.date : stock[key].last_out) : row.date; }
+  }
+  const items = Object.values(stock).sort((a, b) => a.item_name.localeCompare(b.item_name));
+  const knownItems = [...new Set(rationLog.map((r) => r.item_name))];
+
+  const recordUsage = async () => {
+    if (!useForm.item_name || !useForm.quantity) return;
+    setSaving(true);
+    const row = { item_name: useForm.item_name.trim(), category: useForm.category, kind: "out", quantity: Number(useForm.quantity), unit: useForm.unit || null, date: useForm.date, note: useForm.note || null };
+    const saved = await insertRow("ration_log", row);
+    if (saved) { setRationLog((prev) => [saved, ...prev]); setShowUseForm(false); setUseForm({ item_name: "", category: "Ration", quantity: "", unit: "", note: "", date: todayStr() }); }
+    setSaving(false);
+  };
+
+  const stockColor = (item) => {
+    const bal = item.in_qty - item.out_qty;
+    if (item.in_qty === 0) return { bg: "#f8fafd", border: "#cdd6e6", dot: "#8a93a8" };
+    const pct = item.in_qty > 0 ? bal / item.in_qty : 0;
+    if (pct <= 0) return { bg: "#fbeaea", border: "#e74c3c", dot: "#e74c3c" };
+    if (pct <= 0.25) return { bg: "#fff8e6", border: "#f0c040", dot: "#e8b923" };
+    return { bg: "#eafaf1", border: "#27ae60", dot: "#27ae60" };
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: "#1e3a5f" }}>Ration Stock</div>
+        <button onClick={() => setShowUseForm(true)} style={{ ...primaryBtn, background: "#c0392b" }}><Trash2 size={15} /> Record use</button>
+      </div>
+
+      {items.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "#8a93a8", fontSize: 14 }}>
+          <Package size={36} strokeWidth={1.2} style={{ marginBottom: 10, opacity: 0.4 }} />
+          <div>No ration stock yet.</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Pay a bill with a Ration or Animal Feed category to populate inventory.</div>
+        </div>
+      )}
+
+      {items.map((item) => {
+        const bal = item.in_qty - item.out_qty;
+        const colors = stockColor(item);
+        const pct = item.in_qty > 0 ? Math.max(0, Math.min(1, bal / item.in_qty)) : 0;
+        const unit = item.unit || "";
+        return (
+          <div key={item.item_name} style={{ background: colors.bg, border: `1.5px solid ${colors.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f" }}>{item.item_name}</div>
+                <div style={{ fontSize: 12, color: "#8a93a8" }}>{item.category}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 800, fontSize: 18, color: colors.dot }}>{bal > 0 ? bal : 0}{unit ? ` ${unit}` : ""}</div>
+                <div style={{ fontSize: 11, color: "#8a93a8" }}>balance</div>
+              </div>
+            </div>
+            <div style={{ height: 6, background: "#e8eef7", borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
+              <div style={{ height: "100%", width: `${pct * 100}%`, background: colors.dot, borderRadius: 4, transition: "width 0.4s" }} />
+            </div>
+            <div style={{ display: "flex", gap: 14, fontSize: 12, color: "#5a6478" }}>
+              <span>In: <strong>{item.in_qty}{unit ? ` ${unit}` : ""}</strong></span>
+              <span>Used: <strong>{item.out_qty}{unit ? ` ${unit}` : ""}</strong></span>
+              {item.last_in && <span>Last in: <strong>{item.last_in}</strong></span>}
+            </div>
+          </div>
+        );
+      })}
+
+      {showUseForm && (
+        <Modal title="Record usage" onClose={() => setShowUseForm(false)}>
+          <Field label="Item">
+            <ItemAutocomplete value={useForm.item_name} onChange={(v) => setUseForm({ ...useForm, item_name: v })} suggestions={knownItems} placeholder="Select or type item name" />
+          </Field>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Quantity used"><input type="number" inputMode="decimal" value={useForm.quantity} onChange={(e) => setUseForm({ ...useForm, quantity: e.target.value })} placeholder="0" style={inputStyle} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Unit"><input value={useForm.unit} onChange={(e) => setUseForm({ ...useForm, unit: e.target.value })} placeholder="kg, bags…" style={inputStyle} /></Field></div>
+          </div>
+          <Field label="Date"><input type="date" value={useForm.date} onChange={(e) => setUseForm({ ...useForm, date: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Note (optional)"><input value={useForm.note} onChange={(e) => setUseForm({ ...useForm, note: e.target.value })} placeholder="e.g. Morning feed" style={inputStyle} /></Field>
+          <button onClick={recordUsage} disabled={saving} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, background: "#c0392b", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Saving…" : "Record usage"}
+          </button>
+        </Modal>
+      )}
     </div>
   );
 }
