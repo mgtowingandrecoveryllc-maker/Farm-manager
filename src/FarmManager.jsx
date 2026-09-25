@@ -1477,7 +1477,8 @@ function AnimalField({ label, value, onChange, animals, placeholder }) {
 
 // ---------- animals ----------
 const ANIMAL_TYPES = ["Cow", "Buffalo", "Horse", "Goat"];
-const RATION_CATEGORIES = new Set(["Ration", "Animal Feed", "Feed", "Fodder", "Grain", "Silage"]);
+const RATION_CATEGORIES_RAW = ["ration", "animal feed", "feed", "fodder", "grain", "silage", "food", "flour", "bran", "wheat"];
+const isRationCategory = (cat) => cat && RATION_CATEGORIES_RAW.includes(String(cat).toLowerCase().trim());
 const ANIMAL_STATUSES = ["Active", "Pregnant", "Dry", "Sold", "Deceased", "Slaughtered", "Died", "Culled", "Disposed", "Given away"];
 const INACTIVE_STATUSES = new Set(["Sold", "Deceased", "Slaughtered", "Died", "Culled", "Disposed", "Given away"]);
 
@@ -2236,7 +2237,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
       };
       const expSaved = await insertRow("expenses", expRow);
       if (expSaved) setExpenses((prev) => [expSaved, ...prev]);
-      if (RATION_CATEGORIES.has(it.category || b.category)) {
+      if (isRationCategory(it.category || b.category)) {
         const qtyMatch = String(it.quantity || "").match(/^(\d+\.?\d*)\s*(.*)?/);
         const qtyNum = qtyMatch ? Number(qtyMatch[1]) : 0;
         const unit = qtyMatch ? (qtyMatch[2] || "").trim() : (it.quantity || "");
