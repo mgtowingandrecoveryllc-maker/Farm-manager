@@ -212,19 +212,23 @@ function FarmApp({ session, onSignOut }) {
   const [weights, setWeights] = useState([]);
   const [breedingRecs, setBreedingRecs] = useState([]);
   const [inspections, setInspections] = useState([]);
+  const [billItems, setBillItems] = useState([]);
+  const [billItemNames, setBillItemNames] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
       fetchTable("categories"), fetchTable("vendors"),
       fetchTable("bills"), fetchTable("advances"), fetchTable("notices"),
       fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
+      fetchTable("bill_items"), fetchTable("bill_item_names"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
+    setBillItems(bi); setBillItemNames(bin);
     setLoading(false);
   };
 
@@ -320,7 +324,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
-        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
+        {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -2093,7 +2097,7 @@ async function sendUnpaidToWhatsApp(bills) {
 const statusColor = { submitted: "#c79a2e", approved: "#1c5fa8", rejected: "#c0392b", paid: "#27ae60" };
 const statusBg = { submitted: "#fff8e6", approved: "#eef3fb", rejected: "#fbeaea", paid: "#eafaf1" };
 
-function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats, reload }) {
+function Bills({ bills, setBills, vendors, profile, session, expenseCats, constructionCats, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses }) {
   const role = profile?.role || "accountant";
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterScope, setFilterScope] = useState("All");
@@ -2118,24 +2122,28 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
 
   const blankForm = () => ({
     bill_no: "", bill_date: todayStr(), vendor_id: "", vendor_name: "",
-    scope: "farm", category: expenseCats[0] || "Other", item: "", quantity: "",
-    amount: "", note: "", receipt_file: null,
+    scope: "farm", note: "", receipt_file: null,
+    items: [{ category: expenseCats[0] || "Other", item: "", quantity: "", amount: "" }],
   });
   const [form, setForm] = useState(blankForm());
   const [editingId, setEditingId] = useState(null);
 
-  const cats = form.scope === "farm" ? expenseCats : constructionCats;
-
   const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
   const openEdit = (b) => {
     setEditingId(b.id);
-    setForm({ bill_no: b.bill_no || "", bill_date: b.bill_date || todayStr(), vendor_id: b.vendor_id || "", vendor_name: b.vendor_name || "", scope: b.scope || "farm", category: b.category || expenseCats[0], item: b.item || "", quantity: b.quantity || "", amount: String(b.amount || ""), note: b.note || "", receipt_file: null });
+    const existingItems = billItems.filter((it) => it.bill_id === b.id);
+    const items = existingItems.length > 0
+      ? existingItems.map((it) => ({ category: it.category, item: it.item || "", quantity: it.quantity || "", amount: String(it.amount || "") }))
+      : [{ category: b.category || expenseCats[0] || "Other", item: b.item || "", quantity: b.quantity || "", amount: String(b.amount || "") }];
+    setForm({ bill_no: b.bill_no || "", bill_date: b.bill_date || todayStr(), vendor_id: b.vendor_id ? String(b.vendor_id) : "", vendor_name: b.vendor_name || "", scope: b.scope || "farm", note: b.note || "", receipt_file: null, items });
     setShowForm(true);
   };
 
   const save = async () => {
-    if (!form.amount || !form.bill_date) return;
+    const validItems = form.items.filter((it) => it.amount);
+    if (!validItems.length || !form.bill_date) return;
     setUploading(true);
+    const total = validItems.reduce((s, it) => s + Number(it.amount), 0);
     let receipt_path = editingId ? (bills.find((b) => b.id === editingId)?.receipt_path || null) : null;
     if (form.receipt_file) {
       const p = await uploadReceipt(form.receipt_file);
@@ -2145,19 +2153,38 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
       bill_no: form.bill_no, bill_date: form.bill_date,
       vendor_id: (form.vendor_id && form.vendor_id !== "__other__") ? Number(form.vendor_id) : null,
       vendor_name: form.vendor_name || null,
-      scope: form.scope, category: form.category, item: form.item,
-      quantity: form.quantity, amount: Number(form.amount), note: form.note,
+      scope: form.scope, note: form.note,
+      category: validItems[0].category,
+      item: validItems.map((it) => it.item).filter(Boolean).join(", ") || null,
+      quantity: validItems[0].quantity || null,
+      amount: total,
       receipt_path,
     };
+    let billId = editingId;
     if (editingId) {
       const resubmit = bills.find((b) => b.id === editingId)?.status === "rejected";
       const patch = { ...row, ...(resubmit ? { status: "submitted", rejected_reason: null } : {}) };
       if (await updateRow("bills", editingId, patch))
         setBills(bills.map((b) => b.id === editingId ? { ...b, ...patch } : b));
+      await supabase.from("bill_items").delete().eq("bill_id", editingId);
     } else {
       const saved = await insertRow("bills", { ...row, submitted_by: session.user.id, status: "submitted" });
-      if (saved) setBills([saved, ...bills]);
+      if (!saved) { setUploading(false); return; }
+      setBills([saved, ...bills]);
+      billId = saved.id;
     }
+    const itemRows = validItems.map((it) => ({ bill_id: billId, category: it.category, item: it.item || null, quantity: it.quantity || null, amount: Number(it.amount) }));
+    const { data: insertedItems } = await supabase.from("bill_items").insert(itemRows).select();
+    if (insertedItems) {
+      setBillItems((prev) => [...prev.filter((it) => it.bill_id !== billId), ...insertedItems]);
+    }
+    for (const it of validItems) {
+      if (it.item?.trim()) {
+        await supabase.from("bill_item_names").upsert({ category: it.category, name: it.item.trim() }, { onConflict: "category,name" });
+      }
+    }
+    const updatedNames = await fetchTable("bill_item_names");
+    if (updatedNames) setBillItemNames(updatedNames);
     setUploading(false); setShowForm(false); setEditingId(null);
     if (selected) setSelected(null);
   };
@@ -2191,6 +2218,20 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     const { error } = await supabase.from("bills").update(patch).eq("id", b.id);
     if (error) { alert("Could not mark paid: " + error.message); setUploading(false); return; }
     setBills(bills.map((x) => x.id === b.id ? { ...x, ...patch } : x));
+    const items = billItems.filter((it) => it.bill_id === b.id);
+    const itemsToPost = items.length > 0 ? items : [{ category: b.category, item: b.item, amount: b.amount }];
+    const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "";
+    for (const it of itemsToPost) {
+      if (!it.amount) continue;
+      const expRow = {
+        date: paidForm.paid_at || todayStr(),
+        category: it.category || b.category || "Other",
+        amount: Number(it.amount),
+        note: [it.item, vendorLabel, b.bill_no ? `#${b.bill_no}` : ""].filter(Boolean).join(" · "),
+      };
+      const expSaved = await insertRow("expenses", expRow);
+      if (expSaved) setExpenses((prev) => [expSaved, ...prev]);
+    }
     setUploading(false); setShowPaid(false); setSelected(null);
   };
 
@@ -2263,6 +2304,22 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     if (payment_proof_path) patch.payment_proof_path = payment_proof_path;
     const { error } = await supabase.from("bills").update(patch).in("id", ids);
     if (error) { alert("Bulk mark paid failed: " + error.message); setBulkUploading(false); return; }
+    for (const billId of ids) {
+      const b = bills.find((x) => x.id === billId);
+      if (!b) continue;
+      const items = billItems.filter((it) => it.bill_id === billId);
+      const itemsToPost = items.length > 0 ? items : [{ category: b.category, item: b.item, amount: b.amount }];
+      const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "";
+      for (const it of itemsToPost) {
+        if (!it.amount) continue;
+        await insertRow("expenses", {
+          date: bulkPaidForm.paid_at || todayStr(),
+          category: it.category || b.category || "Other",
+          amount: Number(it.amount),
+          note: [it.item, vendorLabel, b.bill_no ? `#${b.bill_no}` : ""].filter(Boolean).join(" · "),
+        });
+      }
+    }
     setBulkMsg(`${ids.length} bill${ids.length === 1 ? "" : "s"} marked paid · ${fmt(selectionTotal)} posted`);
     setBulkAction(null);
     await reload();
@@ -2289,9 +2346,29 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
             <span style={{ fontSize: 12, fontWeight: 700, color: statusColor[b.status], background: statusBg[b.status], padding: "4px 10px", borderRadius: 8, textTransform: "uppercase" }}>{b.status}</span>
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#c0392b", marginBottom: 10 }}>{fmt(b.amount)}</div>
-          {[["Scope", b.scope], ["Category", b.category], ["Item", b.item], ["Quantity", b.quantity], ["Note", b.note]].map(([l, v]) => v ? (
+          {[["Scope", b.scope], ["Note", b.note]].map(([l, v]) => v ? (
             <div key={l} style={{ fontSize: 13, color: "#5a6478", marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{l}:</span> {v}</div>
           ) : null)}
+          {(() => {
+            const items = billItems.filter((it) => it.bill_id === b.id);
+            if (items.length > 0) return (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#8a93a8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Items</div>
+                {items.map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i < items.length - 1 ? "1px solid #f0f2f7" : "none" }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{it.item || "—"}</div>
+                      <div style={{ fontSize: 12, color: "#8a93a8" }}>{it.category}{it.quantity ? ` · ${it.quantity}` : ""}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#1e3a5f" }}>{fmt(it.amount)}</div>
+                  </div>
+                ))}
+              </div>
+            );
+            return <>{[["Category", b.category], ["Item", b.item], ["Quantity", b.quantity]].map(([l, v]) => v ? (
+              <div key={l} style={{ fontSize: 13, color: "#5a6478", marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{l}:</span> {v}</div>
+            ) : null)}</>;
+          })()}
           {b.rejected_reason && <div style={{ marginTop: 8, padding: "8px 12px", background: "#fbeaea", borderRadius: 8, fontSize: 13, color: "#c0392b" }}><strong>Rejected:</strong> {b.rejected_reason}</div>}
         </div>
 
@@ -2390,7 +2467,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         {role === "owner" && <button onClick={() => remove(b.id)} style={{ ...delBtn, width: "100%", padding: 12, display: "flex", justifyContent: "center", gap: 8 }}><Trash2 size={18} /> Delete bill</button>}
 
         {showForm && (
-          <BillForm form={form} setForm={setForm} cats={cats} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} />
+          <BillForm form={form} setForm={setForm} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} billItemNames={billItemNames} />
         )}
       </div>
     );
@@ -2481,7 +2558,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{vendorLabel}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: statusColor[b.status], background: statusBg[b.status], padding: "2px 7px", borderRadius: 6, textTransform: "uppercase" }}>{b.status}</span>
                 </div>
-                <div style={{ fontSize: 12, color: "#8a93a8" }}>{b.bill_date} · {b.category}{b.bill_no ? ` · #${b.bill_no}` : ""}</div>
+                {(() => { const ic = billItems.filter((it) => it.bill_id === b.id).length; return <div style={{ fontSize: 12, color: "#8a93a8" }}>{b.bill_date} · {ic > 0 ? `${ic} item${ic > 1 ? "s" : ""}` : b.category}{b.bill_no ? ` · #${b.bill_no}` : ""}</div>; })()}
               </div>
               <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b", marginLeft: 4, flexShrink: 0 }}>{fmt(b.amount)}</div>
             </div>
@@ -2489,7 +2566,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         })}
 
       {showForm && (
-        <BillForm form={form} setForm={setForm} cats={cats} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} />
+        <BillForm form={form} setForm={setForm} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} billItemNames={billItemNames} />
       )}
 
       {/* Bulk action bar */}
@@ -2565,8 +2642,30 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   );
 }
 
-function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClose, expenseCats, constructionCats }) {
+function ItemAutocomplete({ value, onChange, suggestions, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const filtered = (suggestions || []).filter((s) => s.toLowerCase().includes((value || "").toLowerCase()) && s !== value);
+  return (
+    <div style={{ position: "relative" }}>
+      <input value={value} onChange={(e) => { onChange(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} placeholder={placeholder} style={inputStyle} />
+      {open && filtered.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "white", border: "1px solid #cdd6e6", borderRadius: 8, zIndex: 200, maxHeight: 140, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.12)" }}>
+          {filtered.map((s) => (
+            <div key={s} onMouseDown={() => { onChange(s); setOpen(false); }} style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #f0f2f7" }}>{s}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClose, expenseCats, constructionCats, billItemNames }) {
   const cats = form.scope === "farm" ? expenseCats : constructionCats;
+  const addItem = () => setForm({ ...form, items: [...(form.items || []), { category: cats[0] || "Other", item: "", quantity: "", amount: "" }] });
+  const removeItem = (i) => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) });
+  const updateItem = (i, field, val) => setForm({ ...form, items: form.items.map((it, idx) => idx === i ? { ...it, [field]: val } : it) });
+  const total = (form.items || []).reduce((s, it) => s + (Number(it.amount) || 0), 0);
+
   return (
     <Modal title={editingId ? "Edit bill" : "Add bill"} onClose={onClose}>
       <div style={{ display: "flex", gap: 10 }}>
@@ -2584,21 +2683,47 @@ function BillForm({ form, setForm, vendors, uploading, editingId, onSave, onClos
         )}
       </Field>
       <Field label="Scope">
-        <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value, category: e.target.value === "farm" ? expenseCats[0] : constructionCats[0] })} style={inputStyle}>
+        <select value={form.scope} onChange={(e) => {
+          const newScope = e.target.value;
+          const newCats = newScope === "farm" ? expenseCats : constructionCats;
+          setForm({ ...form, scope: newScope, items: (form.items || []).map((it) => ({ ...it, category: newCats[0] || it.category })) });
+        }} style={inputStyle}>
           <option value="farm">Farm</option>
           <option value="construction">Construction</option>
         </select>
       </Field>
-      <Field label="Category">
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-          {cats.map((c) => <option key={c}>{c}</option>)}
-        </select>
-      </Field>
-      <Field label="Item (optional)"><input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} placeholder="e.g. Cement Bag" style={inputStyle} /></Field>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}><Field label="Quantity"><input value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="e.g. 20 bags" style={inputStyle} /></Field></div>
-        <div style={{ flex: 1 }}><Field label="Amount *"><input type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" style={inputStyle} /></Field></div>
-      </div>
+
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#1e3a5f", margin: "10px 0 6px" }}>Items</div>
+      {(form.items || []).map((it, i) => {
+        const suggestions = (billItemNames || []).filter((n) => n.category === it.category).map((n) => n.name);
+        return (
+          <div key={i} style={{ background: "#f8fafd", borderRadius: 10, padding: "10px 12px", marginBottom: 8, border: "1px solid #e8eef7" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#5a6478" }}>Item {i + 1}</div>
+              {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: "none", border: "none", color: "#c0392b", cursor: "pointer", padding: 0 }}><X size={16} /></button>}
+            </div>
+            <Field label="Category">
+              <select value={it.category} onChange={(e) => updateItem(i, "category", e.target.value)} style={inputStyle}>
+                {cats.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Item name">
+              <ItemAutocomplete value={it.item} onChange={(v) => updateItem(i, "item", v)} suggestions={suggestions} placeholder="e.g. Wheat, Bran, Cement…" />
+            </Field>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1 }}><Field label="Qty"><input value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} placeholder="e.g. 20 bags" style={inputStyle} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="Amount *"><input type="number" inputMode="decimal" value={it.amount} onChange={(e) => updateItem(i, "amount", e.target.value)} placeholder="0" style={inputStyle} /></Field></div>
+            </div>
+          </div>
+        );
+      })}
+      <button onClick={addItem} style={{ width: "100%", border: "1.5px dashed #cdd6e6", background: "transparent", borderRadius: 10, padding: "10px", fontSize: 13, color: "#1e3a5f", cursor: "pointer", fontWeight: 600, marginBottom: 8 }}>+ Add item</button>
+      {(form.items || []).length > 1 && (
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 2px", marginBottom: 4, borderTop: "2px solid #1e3a5f" }}>
+          <span style={{ fontWeight: 700, color: "#1e3a5f" }}>Total</span>
+          <span style={{ fontWeight: 800, fontSize: 16, color: "#1e3a5f" }}>{fmt(total)}</span>
+        </div>
+      )}
       <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
       <Field label="Receipt photo">
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.receipt_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
