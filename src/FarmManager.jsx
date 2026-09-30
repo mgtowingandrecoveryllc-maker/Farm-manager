@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
   TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint, Settings as SettingsIcon,
-  FileText, CheckCircle, XCircle, Clock, Camera, Package
+  FileText, CheckCircle, XCircle, Clock, Camera, Package, Stethoscope, HeartPulse, ThumbsUp
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -215,10 +215,12 @@ function FarmApp({ session, onSignOut }) {
   const [billItems, setBillItems] = useState([]);
   const [billItemNames, setBillItemNames] = useState([]);
   const [rationLog, setRationLog] = useState([]);
+  const [hospitalAdmissions, setHospitalAdmissions] = useState([]);
+  const [hospitalTreatments, setHospitalTreatments] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -226,11 +228,12 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("bills"), fetchTable("advances"), fetchTable("notices"),
       fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
       fetchTable("bill_items"), fetchTable("bill_item_names"),
-      fetchTable("ration_log"),
+      fetchTable("ration_log"), fetchTable("hospital_admissions"), fetchTable("hospital_treatments"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
+    setHospitalAdmissions(ha); setHospitalTreatments(ht);
     setLoading(false);
   };
 
@@ -299,6 +302,7 @@ function FarmApp({ session, onSignOut }) {
     { id: "medicines", label: "Medicines", icon: Syringe },
     { id: "animals", label: "Animals", icon: PawPrint },
     { id: "ration", label: "Ration", icon: Package },
+    { id: "hospital", label: "Hospital", icon: Stethoscope },
     { id: "reports", label: "Reports", icon: TrendingUp },
   ];
 
@@ -329,6 +333,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
         {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses, rationLog, setRationLog }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
         {tab === "ration" && <RationInventory rationLog={rationLog} setRationLog={setRationLog} />}
+        {tab === "hospital" && <Hospital admissions={hospitalAdmissions} setAdmissions={setHospitalAdmissions} treatments={hospitalTreatments} setTreatments={setHospitalTreatments} animals={animals} medicines={medicines} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -2764,6 +2769,235 @@ function ReceiptViewer({ path }) {
   return (
     <div style={{ ...card, padding: 8, marginBottom: 14 }}>
       <img src={url} alt="Receipt" style={{ width: "100%", borderRadius: 8, display: "block" }} />
+    </div>
+  );
+}
+
+// ---------- hospital ----------
+function Hospital({ admissions, setAdmissions, treatments, setTreatments, animals, medicines }) {
+  const [view, setView] = useState("current"); // current | history
+  const [selected, setSelected] = useState(null); // admission id
+  const [showAdmit, setShowAdmit] = useState(false);
+  const [showTreatForm, setShowTreatForm] = useState(false);
+  const [showDischarge, setShowDischarge] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const blankAdmit = () => ({ animal_tag: "", admission_date: todayStr(), reason: "", vet_name: "", note: "" });
+  const [admitForm, setAdmitForm] = useState(blankAdmit());
+
+  const blankTreat = () => ({ date: todayStr(), treatment: "", medicine: "", dose: "", administered_by: "", note: "" });
+  const [treatForm, setTreatForm] = useState(blankTreat());
+
+  const blankDischarge = () => ({ discharge_date: todayStr(), status: "discharged", outcome: "" });
+  const [dischargeForm, setDischargeForm] = useState(blankDischarge());
+
+  const current = admissions.filter((a) => a.status === "admitted").sort((a, b) => a.admission_date > b.admission_date ? -1 : 1);
+  const history = admissions.filter((a) => a.status !== "admitted").sort((a, b) => a.discharge_date > b.discharge_date ? -1 : 1);
+
+  const daysSince = (dateStr) => {
+    if (!dateStr) return 0;
+    return Math.floor((new Date() - new Date(dateStr)) / 86400000);
+  };
+
+  const admit = async () => {
+    if (!admitForm.animal_tag || !admitForm.admission_date) return;
+    setSaving(true);
+    const animalMatch = animals.find((a) => a.tag === admitForm.animal_tag);
+    const row = { animal_tag: admitForm.animal_tag, animal_id: animalMatch?.id || null, admission_date: admitForm.admission_date, reason: admitForm.reason || null, vet_name: admitForm.vet_name || null, note: admitForm.note || null, status: "admitted" };
+    const saved = await insertRow("hospital_admissions", row);
+    if (saved) { setAdmissions([saved, ...admissions]); setShowAdmit(false); setAdmitForm(blankAdmit()); }
+    setSaving(false);
+  };
+
+  const addTreatment = async (admissionId) => {
+    if (!treatForm.treatment && !treatForm.medicine) return;
+    setSaving(true);
+    const row = { admission_id: admissionId, date: treatForm.date, treatment: treatForm.treatment || null, medicine: treatForm.medicine || null, dose: treatForm.dose || null, administered_by: treatForm.administered_by || null, note: treatForm.note || null };
+    const saved = await insertRow("hospital_treatments", row);
+    if (saved) { setTreatments([saved, ...treatments]); setShowTreatForm(false); setTreatForm(blankTreat()); }
+    setSaving(false);
+  };
+
+  const discharge = async (admissionId) => {
+    if (!dischargeForm.discharge_date) return;
+    setSaving(true);
+    const patch = { status: dischargeForm.status, discharge_date: dischargeForm.discharge_date, outcome: dischargeForm.outcome || null };
+    const { error } = await supabase.from("hospital_admissions").update(patch).eq("id", admissionId);
+    if (!error) { setAdmissions(admissions.map((a) => a.id === admissionId ? { ...a, ...patch } : a)); setShowDischarge(false); setSelected(null); }
+    else alert("Could not discharge: " + error.message);
+    setSaving(false);
+  };
+
+  const removeAdmission = async (id) => {
+    if (!window.confirm("Delete this admission record?")) return;
+    await supabase.from("hospital_treatments").delete().eq("admission_id", id);
+    if (await deleteRow("hospital_admissions", id)) { setAdmissions(admissions.filter((a) => a.id !== id)); setSelected(null); }
+  };
+
+  // Detail view
+  if (selected !== null) {
+    const adm = admissions.find((a) => a.id === selected);
+    if (!adm) { setSelected(null); return null; }
+    const adTreatments = treatments.filter((t) => t.admission_id === adm.id).sort((a, b) => b.date.localeCompare(a.date));
+    const isActive = adm.status === "admitted";
+    const days = daysSince(adm.admission_date);
+    const statusColors = { admitted: "#1c5fa8", discharged: "#27ae60", died: "#c0392b" };
+
+    return (
+      <div>
+        <button onClick={() => { setSelected(null); setShowTreatForm(false); setShowDischarge(false); }} style={{ background: "none", border: "none", color: "#1e3a5f", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← Back</button>
+
+        <div style={card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>Tag {adm.animal_tag}</div>
+              <div style={{ fontSize: 13, color: "#8a93a8" }}>Admitted {adm.admission_date} · {days} day{days !== 1 ? "s" : ""} {isActive ? "in hospital" : ""}</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, textTransform: "uppercase", background: statusColors[adm.status] + "22", color: statusColors[adm.status] }}>{adm.status}</span>
+          </div>
+          {adm.reason && <div style={{ fontSize: 13, color: "#5a6478", marginBottom: 4 }}><strong>Reason:</strong> {adm.reason}</div>}
+          {adm.vet_name && <div style={{ fontSize: 13, color: "#5a6478", marginBottom: 4 }}><strong>Vet:</strong> {adm.vet_name}</div>}
+          {adm.note && <div style={{ fontSize: 13, color: "#5a6478", marginBottom: 4 }}><strong>Note:</strong> {adm.note}</div>}
+          {!isActive && adm.discharge_date && (
+            <div style={{ marginTop: 8, padding: "8px 10px", background: "#eafaf1", borderRadius: 8, fontSize: 13 }}>
+              <strong>Discharged:</strong> {adm.discharge_date} · <strong>Outcome:</strong> {adm.outcome || "—"}
+            </div>
+          )}
+        </div>
+
+        {isActive && !showDischarge && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            <button onClick={() => { setTreatForm(blankTreat()); setShowTreatForm(true); }} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}><Plus size={16} /> Add treatment</button>
+            <button onClick={() => { setDischargeForm(blankDischarge()); setShowDischarge(true); }} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#27ae60" }}><ThumbsUp size={16} /> Discharge</button>
+          </div>
+        )}
+
+        {showTreatForm && (
+          <div style={{ ...card, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Record treatment</div>
+            <Field label="Date"><input type="date" value={treatForm.date} onChange={(e) => setTreatForm({ ...treatForm, date: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Treatment / Procedure"><input value={treatForm.treatment} onChange={(e) => setTreatForm({ ...treatForm, treatment: e.target.value })} placeholder="e.g. IV drip, wound dressing" style={inputStyle} /></Field>
+            <Field label="Medicine given">
+              <ItemAutocomplete value={treatForm.medicine} onChange={(v) => setTreatForm({ ...treatForm, medicine: v })} suggestions={medicines.map((m) => m.name)} placeholder="Medicine name (optional)" />
+            </Field>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1 }}><Field label="Dose"><input value={treatForm.dose} onChange={(e) => setTreatForm({ ...treatForm, dose: e.target.value })} placeholder="e.g. 5ml" style={inputStyle} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="Given by"><input value={treatForm.administered_by} onChange={(e) => setTreatForm({ ...treatForm, administered_by: e.target.value })} placeholder="Name" style={inputStyle} /></Field></div>
+            </div>
+            <Field label="Note"><input value={treatForm.note} onChange={(e) => setTreatForm({ ...treatForm, note: e.target.value })} style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => addTreatment(adm.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save treatment"}</button>
+              <button onClick={() => setShowTreatForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {showDischarge && (
+          <div style={{ ...card, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Discharge animal</div>
+            <Field label="Discharge date"><input type="date" value={dischargeForm.discharge_date} onChange={(e) => setDischargeForm({ ...dischargeForm, discharge_date: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Status">
+              <select value={dischargeForm.status} onChange={(e) => setDischargeForm({ ...dischargeForm, status: e.target.value })} style={inputStyle}>
+                <option value="discharged">Discharged — Recovered</option>
+                <option value="died">Died</option>
+              </select>
+            </Field>
+            <Field label="Outcome / Notes"><input value={dischargeForm.outcome} onChange={(e) => setDischargeForm({ ...dischargeForm, outcome: e.target.value })} placeholder="e.g. Fully recovered, sent back to herd" style={inputStyle} /></Field>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => discharge(adm.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: dischargeForm.status === "died" ? "#c0392b" : "#27ae60", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Confirm discharge"}</button>
+              <button onClick={() => setShowDischarge(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ fontWeight: 700, fontSize: 14, color: "#1e3a5f", marginBottom: 10, marginTop: 4 }}>Treatment log</div>
+        {adTreatments.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#8a93a8", fontSize: 13, padding: "20px 0" }}>No treatments recorded yet.</div>
+        ) : adTreatments.map((t) => (
+          <div key={t.id} style={{ ...card, marginBottom: 8, padding: "10px 14px", borderLeft: "3px solid #1c5fa8" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{t.treatment || t.medicine || "Treatment"}</div>
+              <div style={{ fontSize: 12, color: "#8a93a8" }}>{t.date}</div>
+            </div>
+            {t.medicine && t.treatment && <div style={{ fontSize: 13, color: "#5a6478" }}>Medicine: {t.medicine}{t.dose ? ` · ${t.dose}` : ""}</div>}
+            {t.medicine && !t.treatment && t.dose && <div style={{ fontSize: 13, color: "#5a6478" }}>Dose: {t.dose}</div>}
+            {t.administered_by && <div style={{ fontSize: 12, color: "#8a93a8" }}>By: {t.administered_by}</div>}
+            {t.note && <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{t.note}</div>}
+          </div>
+        ))}
+
+        <button onClick={() => removeAdmission(adm.id)} style={{ ...delBtn, width: "100%", padding: 12, display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}><Trash2 size={16} /> Delete record</button>
+      </div>
+    );
+  }
+
+  // List view
+  const pool = view === "current" ? current : history;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: "#1e3a5f", display: "flex", alignItems: "center", gap: 8 }}><Stethoscope size={20} /> Hospital</div>
+        {view === "current" && <button onClick={() => { setAdmitForm(blankAdmit()); setShowAdmit(true); }} style={primaryBtn}><Plus size={16} /> Admit animal</button>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        {[["current", `Current (${current.length})`], ["history", `History (${history.length})`]].map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)} style={{ flex: 1, border: "1px solid #cdd6e6", borderRadius: 20, padding: "8px", fontSize: 13, fontWeight: 700, cursor: "pointer", background: view === v ? "#1e3a5f" : "white", color: view === v ? "white" : "#3a4a3f" }}>{label}</button>
+        ))}
+      </div>
+
+      {current.length > 0 && view === "current" && (
+        <div style={{ background: "#fbeaea", border: "1px solid #e74c3c", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13, fontWeight: 600, color: "#c0392b" }}>
+          🏥 {current.length} animal{current.length > 1 ? "s" : ""} currently admitted
+        </div>
+      )}
+
+      {pool.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "#8a93a8" }}>
+          <HeartPulse size={36} strokeWidth={1.2} style={{ marginBottom: 10, opacity: 0.4 }} />
+          <div style={{ fontSize: 14 }}>{view === "current" ? "No animals currently admitted." : "No discharge history yet."}</div>
+        </div>
+      )}
+
+      {pool.map((adm) => {
+        const days = view === "current" ? daysSince(adm.admission_date) : null;
+        const treatCount = treatments.filter((t) => t.admission_id === adm.id).length;
+        const urgent = days !== null && days >= 3;
+        return (
+          <div key={adm.id} onClick={() => setSelected(adm.id)} style={{ ...card, marginBottom: 10, cursor: "pointer", padding: "12px 14px", borderLeft: `4px solid ${adm.status === "died" ? "#c0392b" : adm.status === "discharged" ? "#27ae60" : urgent ? "#e8b923" : "#1c5fa8"}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Tag {adm.animal_tag}</div>
+                <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{adm.reason || "No reason recorded"}</div>
+                <div style={{ fontSize: 12, color: "#8a93a8" }}>
+                  {view === "current" ? `${days} day${days !== 1 ? "s" : ""} in hospital · ${treatCount} treatment${treatCount !== 1 ? "s" : ""}` : `Discharged ${adm.discharge_date} · ${adm.outcome || ""}`}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                {adm.vet_name && <div style={{ fontSize: 11, color: "#8a93a8" }}>{adm.vet_name}</div>}
+                {view === "current" && days >= 3 && <div style={{ fontSize: 11, color: "#e8b923", fontWeight: 700 }}>⚠ Long stay</div>}
+                {adm.status === "died" && <div style={{ fontSize: 11, color: "#c0392b", fontWeight: 700 }}>Died</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {showAdmit && (
+        <Modal title="Admit animal" onClose={() => setShowAdmit(false)}>
+          <Field label="Animal tag">
+            <ItemAutocomplete value={admitForm.animal_tag} onChange={(v) => setAdmitForm({ ...admitForm, animal_tag: v })} suggestions={animals.map((a) => a.tag)} placeholder="Tag number" />
+          </Field>
+          <Field label="Admission date"><input type="date" value={admitForm.admission_date} onChange={(e) => setAdmitForm({ ...admitForm, admission_date: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Reason / Symptoms"><input value={admitForm.reason} onChange={(e) => setAdmitForm({ ...admitForm, reason: e.target.value })} placeholder="e.g. Fever, limping, not eating" style={inputStyle} /></Field>
+          <Field label="Vet name"><input value={admitForm.vet_name} onChange={(e) => setAdmitForm({ ...admitForm, vet_name: e.target.value })} placeholder="optional" style={inputStyle} /></Field>
+          <Field label="Note"><input value={admitForm.note} onChange={(e) => setAdmitForm({ ...admitForm, note: e.target.value })} style={inputStyle} /></Field>
+          <button onClick={admit} disabled={saving} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Saving…" : "Admit animal"}
+          </button>
+        </Modal>
+      )}
     </div>
   );
 }
