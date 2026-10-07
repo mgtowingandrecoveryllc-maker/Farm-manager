@@ -823,13 +823,13 @@ function Expenses({ expenses, setExpenses, advances, setAdvances, categories = E
   const [query, setQuery] = useState("");
   const [filterCat, setFilterCat] = useState("All");
   const [filterMonth, setFilterMonth] = useState("All");
-  const blankForm = () => ({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "", employee: EMPLOYEES[0], deduction: "0" });
+  const blankForm = () => ({ date: todayStr(), category: categories[0] || "Other", amount: "", note: "", employee: EMPLOYEES[0], deduction: "0", receipt_file: null, receipt_path: null });
   const [form, setForm] = useState(blankForm());
 
   const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
   const openEdit = (e) => {
     setEditingId(e.id);
-    setForm({ date: e.date || todayStr(), category: e.category || categories[0], amount: String(e.amount ?? ""), note: e.note || "", employee: EMPLOYEES[0], deduction: "0" });
+    setForm({ date: e.date || todayStr(), category: e.category || categories[0], amount: String(e.amount ?? ""), note: e.note || "", employee: EMPLOYEES[0], deduction: "0", receipt_file: null, receipt_path: e.receipt_path || null });
     setShowForm(true);
   };
 
@@ -841,7 +841,12 @@ function Expenses({ expenses, setExpenses, advances, setAdvances, categories = E
   const save = async () => {
     if (!form.amount) return;
     const note = isSalary ? form.employee : form.note;
-    const row = { date: form.date, category: form.category, amount: Number(form.amount), note };
+    let receipt_path = form.receipt_path || null;
+    if (form.receipt_file) {
+      const p = await uploadReceipt(form.receipt_file);
+      if (p) receipt_path = p;
+    }
+    const row = { date: form.date, category: form.category, amount: Number(form.amount), note, receipt_path };
     if (editingId) {
       if (await updateRow("expenses", editingId, row))
         setExpenses(expenses.map((e) => e.id === editingId ? { ...e, ...row } : e));
@@ -931,7 +936,7 @@ function Expenses({ expenses, setExpenses, advances, setAdvances, categories = E
         filtered.map((e) => (
           <div key={e.id} style={{ ...card, padding: "12px 14px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div onClick={() => openEdit(e)} style={{ cursor: "pointer", flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{e.category} <span style={{ fontWeight: 800, color: "#c0392b", marginLeft: 6 }}>{fmt(e.amount)}</span></div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{e.category} <span style={{ fontWeight: 800, color: "#c0392b", marginLeft: 6 }}>{fmt(e.amount)}</span>{e.receipt_path && <Camera size={13} style={{ marginLeft: 6, color: "#8a93a8", verticalAlign: "middle" }} />}</div>
               <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{e.date}{e.note ? ` · ${e.note}` : ""}</div>
             </div>
             <button onClick={() => remove(e.id)} style={delBtn}><Trash2 size={18} /></button>
@@ -984,6 +989,19 @@ function Expenses({ expenses, setExpenses, advances, setAdvances, categories = E
             <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. 50kg cattle feed" style={inputStyle} /></Field>
           )}
 
+          {form.receipt_path && !form.receipt_file && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginBottom: 4 }}>Attached receipt</div>
+              <ReceiptViewer path={form.receipt_path} />
+            </div>
+          )}
+          <Field label={form.receipt_path ? "Replace receipt" : "Attach receipt (optional)"}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.receipt_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+              <Camera size={16} />
+              {form.receipt_file ? form.receipt_file.name : (form.receipt_path ? "Take/choose new photo" : "Take photo or choose file")}
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, receipt_file: e.target.files[0] || null })} />
+            </label>
+          </Field>
           <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update expense" : "Save expense"}</button>
         </Modal>
       )}
