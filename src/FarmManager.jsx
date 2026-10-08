@@ -298,7 +298,7 @@ function FarmApp({ session, onSignOut }) {
   const tabs = [
     { id: "dashboard", label: "Home", icon: Home },
     { id: "expenses", label: "Expenses", icon: Wallet },
-    { id: "bills", label: "Bills", icon: FileText, badge: profile?.role === "owner" && submittedCount > 0 ? submittedCount : 0 },
+    { id: "bills", label: "Bills", icon: FileText, badge: (profile?.role === "owner" || profile?.role === "manager") && submittedCount > 0 ? submittedCount : 0 },
     { id: "medicines", label: "Medicines", icon: Syringe },
     { id: "animals", label: "Animals", icon: PawPrint },
     { id: "ration", label: "Ration", icon: Package },
@@ -2005,6 +2005,7 @@ function SettingsScreen({ cats, setCats, vendors, setVendors, profile, userEmail
                     <select value={p.role} onChange={(e) => changeRole(p.id, e.target.value)}
                       style={{ border: "1px solid #cdd6e6", borderRadius: 8, padding: "5px 8px", fontSize: 13, background: "white", color: "#1e3a5f", fontWeight: 600 }}>
                       <option value="owner">owner</option>
+                      <option value="manager">manager</option>
                       <option value="accountant">accountant</option>
                     </select>
                     {p.id !== profile?.id && (
@@ -2371,8 +2372,8 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   if (selected) {
     const b = bills.find((x) => x.id === selected.id) || selected;
     const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "—";
-    const canEdit = role === "owner" || (b.submitted_by === session.user.id && b.status === "submitted") || (b.submitted_by === session.user.id && b.status === "rejected");
-    const canApprove = role === "owner" && b.status === "submitted";
+    const canEdit = role === "owner" || role === "manager" || (b.submitted_by === session.user.id && b.status === "submitted") || (b.submitted_by === session.user.id && b.status === "rejected");
+    const canApprove = (role === "owner" || role === "manager") && b.status === "submitted";
 
     return (
       <div>
@@ -2426,7 +2427,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         )}
 
         {/* Revert approved → submitted */}
-        {role === "owner" && b.status === "approved" && !showPaid && (
+        {(role === "owner" || role === "manager") && b.status === "approved" && !showPaid && (
           <button onClick={async () => {
             if (!window.confirm("Revert this bill back to submitted?")) return;
             const { error } = await supabase.from("bills").update({ status: "submitted", approved_at: null, approved_by: null }).eq("id", b.id);
@@ -2518,7 +2519,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <SectionHeader title="Bills" onAdd={openAdd} onExport={() => exportCSV("bills.csv", bills)} />
-        {role === "owner" && !selectMode && filtered.length > 0 && (
+        {(role === "owner" || role === "manager") && !selectMode && filtered.length > 0 && (
           <button onClick={() => setSelectMode(true)} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#1e3a5f" }}>Select</button>
         )}
         {selectMode && (
@@ -2713,7 +2714,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
             {mixedHint && <div style={{ fontSize: 12, color: "#c0392b", fontWeight: 600 }}>Select bills with the same status</div>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {selectionHomogeneous && selectionStatus === "submitted" && role === "owner" && (
+            {selectionHomogeneous && selectionStatus === "submitted" && (role === "owner" || role === "manager") && (
               <button onClick={() => setBulkAction("approve")} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#1c5fa8" }}>
                 <CheckCircle size={16} /> Approve {selectedIds.size}
               </button>
