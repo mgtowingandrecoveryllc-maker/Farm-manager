@@ -2546,11 +2546,13 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
           })
           .filter((it) => it.bill)
           .sort((a, b) => (b.bill?.bill_date || "").localeCompare(a.bill?.bill_date || ""));
+        const [expandedItem, setExpandedItem] = useState(null);
+        const statusColors = { submitted: "#e8b923", approved: "#1c5fa8", paid: "#27ae60", rejected: "#c0392b" };
         return (
           <div>
             <div style={{ position: "relative", marginBottom: 12 }}>
               <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#8a93a8" }} />
-              <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search item name…" style={{ ...inputStyle, paddingLeft: 36 }} autoFocus />
+              <input value={itemSearch} onChange={(e) => { setItemSearch(e.target.value); setExpandedItem(null); }} placeholder="Search item name…" style={{ ...inputStyle, paddingLeft: 36 }} autoFocus />
             </div>
             {q.length >= 2 && results.length === 0 && (
               <div style={{ textAlign: "center", color: "#8a93a8", fontSize: 13, padding: "24px 0" }}>No items found for "{itemSearch}"</div>
@@ -2558,19 +2560,64 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
             {results.map((it, i) => {
               const b = it.bill;
               const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "—";
+              const isOpen = expandedItem === i;
+              const statusColor = statusColors[b.status] || "#8a93a8";
               return (
-                <div key={i} style={{ ...card, marginBottom: 8, padding: "12px 14px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{it.item}</div>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b" }}>{fmt(it.amount)}</div>
+                <div key={i} style={{ ...card, marginBottom: 8, padding: 0, overflow: "hidden", cursor: "pointer" }} onClick={() => setExpandedItem(isOpen ? null : i)}>
+                  {/* Summary row */}
+                  <div style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{it.item}</div>
+                      <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>
+                        {b.bill_date} · {vendorLabel}{it.quantity ? ` · Qty ${it.quantity}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b" }}>{fmt(it.amount)}</div>
+                      <div style={{ fontSize: 12, color: isOpen ? "#1e3a5f" : "#8a93a8" }}>{isOpen ? "▲" : "▼"}</div>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
-                    {it.quantity && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Qty</span> {it.quantity}</div>}
-                    <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Date</span> {b.bill_date || "—"}</div>
-                    <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Vendor</span> {vendorLabel}</div>
-                    {it.category && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Category</span> {it.category}</div>}
-                  </div>
-                  {b.bill_no && <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 4 }}>Bill #{b.bill_no} · {b.status}</div>}
+
+                  {/* Expanded detail */}
+                  {isOpen && (
+                    <div style={{ borderTop: "1px solid #eef1f7", padding: "14px 14px", background: "#f8fafd" }}>
+                      {[
+                        ["Item", it.item],
+                        ["Category", it.category],
+                        ["Quantity", it.quantity],
+                        ["Amount", fmt(it.amount)],
+                        ["Bill Date", b.bill_date],
+                        ["Vendor", vendorLabel],
+                        ["Bill No.", b.bill_no],
+                        ["Reference", b.paid_reference],
+                        ["Scope", b.scope],
+                        ["Payment Method", b.paid_method],
+                        ["Paid On", b.paid_at],
+                        ["Bill Note", b.note],
+                      ].filter(([, v]) => v).map(([label, val]) => (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #eef1f7", fontSize: 13 }}>
+                          <span style={{ color: "#8a93a8", fontWeight: 600 }}>{label}</span>
+                          <span style={{ fontWeight: 600, color: "#1e3a5f", textAlign: "right", maxWidth: "60%" }}>{val}</span>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 13 }}>
+                        <span style={{ color: "#8a93a8", fontWeight: 600 }}>Status</span>
+                        <span style={{ fontWeight: 700, color: statusColor, textTransform: "capitalize" }}>{b.status}</span>
+                      </div>
+                      {b.receipt_path && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 12, color: "#8a93a8", marginBottom: 6, fontWeight: 600 }}>Receipt</div>
+                          <ReceiptViewer path={b.receipt_path} />
+                        </div>
+                      )}
+                      {b.payment_proof_path && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 12, color: "#8a93a8", marginBottom: 6, fontWeight: 600 }}>Payment proof</div>
+                          <ReceiptViewer path={b.payment_proof_path} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
