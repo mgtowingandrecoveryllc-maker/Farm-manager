@@ -2253,7 +2253,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
     for (const it of itemsToPost) {
       if (!it.amount) continue;
       const expRow = {
-        date: paidForm.paid_at || todayStr(),
+        date: b.bill_date || todayStr(),
         category: it.category || b.category || "Other",
         amount: Number(it.amount),
         note: [it.item, vendorLabel, b.bill_no ? `#${b.bill_no}` : ""].filter(Boolean).join(" · "),
@@ -2264,7 +2264,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         const qtyMatch = String(it.quantity || "").match(/^(\d+\.?\d*)\s*(.*)?/);
         const qtyNum = qtyMatch ? Number(qtyMatch[1]) : 0;
         const unit = qtyMatch ? (qtyMatch[2] || "").trim() : (it.quantity || "");
-        const rlRow = { item_name: it.item || "Unknown", category: it.category || b.category, kind: "in", quantity: qtyNum, unit: unit || null, date: paidForm.paid_at || todayStr(), note: `From bill: ${vendorLabel}${b.bill_no ? ` #${b.bill_no}` : ""}`, bill_id: b.id };
+        const rlRow = { item_name: it.item || "Unknown", category: it.category || b.category, kind: "in", quantity: qtyNum, unit: unit || null, date: b.bill_date || todayStr(), note: `From bill: ${vendorLabel}${b.bill_no ? ` #${b.bill_no}` : ""}`, bill_id: b.id };
         const rlSaved = await insertRow("ration_log", rlRow);
         if (rlSaved) setRationLog((prev) => [rlSaved, ...prev]);
       }
@@ -2350,7 +2350,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
       for (const it of itemsToPost) {
         if (!it.amount) continue;
         await insertRow("expenses", {
-          date: bulkPaidForm.paid_at || todayStr(),
+          date: b.bill_date || todayStr(),
           category: it.category || b.category || "Other",
           amount: Number(it.amount),
           note: [it.item, vendorLabel, b.bill_no ? `#${b.bill_no}` : ""].filter(Boolean).join(" · "),
