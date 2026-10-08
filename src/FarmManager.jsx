@@ -2568,7 +2568,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
                     {it.quantity && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Qty</span> {it.quantity}</div>}
                     <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Date</span> {b.bill_date || "—"}</div>
                     <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Vendor</span> {vendorLabel}</div>
-                    {it.category && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Cat</span> {it.category}</div>}
+                    {it.category && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Category</span> {it.category}</div>}
                   </div>
                   {b.bill_no && <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 4 }}>Bill #{b.bill_no} · {b.status}</div>}
                 </div>
