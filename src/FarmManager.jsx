@@ -2148,6 +2148,8 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   const [bulkMsg, setBulkMsg] = useState("");
 
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); setBulkAction(null); setBulkMsg(""); };
+  const [billsView, setBillsView] = useState("bills"); // "bills" | "search"
+  const [itemSearch, setItemSearch] = useState("");
 
   const blankForm = () => ({
     bill_no: "", bill_date: todayStr(), vendor_id: "", vendor_name: "",
@@ -2526,9 +2528,59 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         )}
       </div>
 
+      {!selectMode && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          {[["bills", "Bills"], ["search", "Item Search"]].map(([v, label]) => (
+            <button key={v} onClick={() => setBillsView(v)} style={{ flex: 1, border: "1px solid #cdd6e6", borderRadius: 20, padding: "8px", fontSize: 13, fontWeight: 700, cursor: "pointer", background: billsView === v ? "#1e3a5f" : "white", color: billsView === v ? "white" : "#3a4a3f" }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {billsView === "search" && !selectMode && (() => {
+        const q = itemSearch.toLowerCase().trim();
+        const results = q.length < 2 ? [] : billItems
+          .filter((it) => (it.item || "").toLowerCase().includes(q))
+          .map((it) => {
+            const b = bills.find((x) => x.id === it.bill_id);
+            return { ...it, bill: b };
+          })
+          .filter((it) => it.bill)
+          .sort((a, b) => (b.bill?.bill_date || "").localeCompare(a.bill?.bill_date || ""));
+        return (
+          <div>
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#8a93a8" }} />
+              <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search item name…" style={{ ...inputStyle, paddingLeft: 36 }} autoFocus />
+            </div>
+            {q.length >= 2 && results.length === 0 && (
+              <div style={{ textAlign: "center", color: "#8a93a8", fontSize: 13, padding: "24px 0" }}>No items found for "{itemSearch}"</div>
+            )}
+            {results.map((it, i) => {
+              const b = it.bill;
+              const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "—";
+              return (
+                <div key={i} style={{ ...card, marginBottom: 8, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{it.item}</div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b" }}>{fmt(it.amount)}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
+                    {it.quantity && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Qty</span> {it.quantity}</div>}
+                    <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Date</span> {b.bill_date || "—"}</div>
+                    <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Vendor</span> {vendorLabel}</div>
+                    {it.category && <div style={{ fontSize: 13, color: "#5a6478" }}><span style={{ color: "#8a93a8" }}>Cat</span> {it.category}</div>}
+                  </div>
+                  {b.bill_no && <div style={{ fontSize: 11, color: "#8a93a8", marginTop: 4 }}>Bill #{b.bill_no} · {b.status}</div>}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {bulkMsg && <div style={{ background: "#eafaf1", border: "1px solid #a9dfbf", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#1e8449", marginBottom: 12 }}>{bulkMsg}</div>}
 
-      {!selectMode && (() => {
+      {billsView === "bills" && !selectMode && (() => {
         const unpaidBills = bills.filter((b) => b.status === "approved");
         const unpaidTotal = unpaidBills.reduce((s, b) => s + Number(b.amount), 0);
         if (unpaidBills.length > 0) return (
@@ -2557,27 +2609,27 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
         );
       })()}
 
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
+      {billsView === "bills" && <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
         {["All", "submitted", "approved", "paid", "rejected"].map((s) => (
           <button key={s} onClick={() => { setFilterStatus(s); setSelectedIds(new Set()); }} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterStatus === s ? "#1e3a5f" : "white", color: filterStatus === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterStatus === s ? 700 : 500, textTransform: "capitalize",
           }}>{s}</button>
         ))}
-      </div>
+      </div>}
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+      {billsView === "bills" && <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {["All", "farm", "construction"].map((s) => (
           <button key={s} onClick={() => { setFilterScope(s); setSelectedIds(new Set()); }} style={{
             whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
             background: filterScope === s ? "#c79a2e" : "white", color: filterScope === s ? "white" : "#3a4a3f", cursor: "pointer", fontWeight: filterScope === s ? 700 : 500, textTransform: "capitalize",
           }}>{s}</button>
         ))}
-      </div>
+      </div>}
 
-      <MonthFilter months={months} value={filterMonth} onChange={setFilterMonth} />
+      {billsView === "bills" && <MonthFilter months={months} value={filterMonth} onChange={setFilterMonth} />}
 
-      {filtered.length === 0 ? <Empty icon={FileText} text="No bills yet. Tap Add to create one." /> :
+      {billsView === "bills" && (filtered.length === 0 ? <Empty icon={FileText} text="No bills yet. Tap Add to create one." /> :
         filtered.map((b) => {
           const vendorLabel = vendors.find((v) => v.id === b.vendor_id)?.name || b.vendor_name || "Unknown vendor";
           const isChecked = selectedIds.has(b.id);
@@ -2600,7 +2652,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
               <div style={{ fontWeight: 800, fontSize: 15, color: "#c0392b", marginLeft: 4, flexShrink: 0 }}>{fmt(b.amount)}</div>
             </div>
           );
-        })}
+        }))}
 
       {showForm && (
         <BillForm form={form} setForm={setForm} vendors={vendors} uploading={uploading} editingId={editingId} onSave={save} onClose={() => { setShowForm(false); setEditingId(null); }} expenseCats={expenseCats} constructionCats={constructionCats} billItemNames={billItemNames} />
