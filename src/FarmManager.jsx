@@ -2150,6 +2150,7 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); setBulkAction(null); setBulkMsg(""); };
   const [billsView, setBillsView] = useState("bills"); // "bills" | "search"
   const [itemSearch, setItemSearch] = useState("");
+  const [expandedItem, setExpandedItem] = useState(null);
 
   const blankForm = () => ({
     bill_no: "", bill_date: todayStr(), vendor_id: "", vendor_name: "",
@@ -2546,13 +2547,12 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
           })
           .filter((it) => it.bill)
           .sort((a, b) => (b.bill?.bill_date || "").localeCompare(a.bill?.bill_date || ""));
-        const [expandedItem, setExpandedItem] = useState(null);
         const statusColors = { submitted: "#e8b923", approved: "#1c5fa8", paid: "#27ae60", rejected: "#c0392b" };
         return (
           <div>
             <div style={{ position: "relative", marginBottom: 12 }}>
               <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#8a93a8" }} />
-              <input value={itemSearch} onChange={(e) => { setItemSearch(e.target.value); setExpandedItem(null); }} placeholder="Search item name…" style={{ ...inputStyle, paddingLeft: 36 }} autoFocus />
+              <input value={itemSearch} onChange={(e) => { setItemSearch(e.target.value); setExpandedItem(null); }} placeholder="Search item name…" style={{ ...inputStyle, paddingLeft: 36 }} />
             </div>
             {q.length >= 2 && results.length === 0 && (
               <div style={{ textAlign: "center", color: "#8a93a8", fontSize: 13, padding: "24px 0" }}>No items found for "{itemSearch}"</div>
