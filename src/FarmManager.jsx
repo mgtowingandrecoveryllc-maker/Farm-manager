@@ -2175,8 +2175,27 @@ function Bills({ bills, setBills, vendors, profile, session, expenseCats, constr
   const save = async () => {
     const validItems = form.items.filter((it) => it.amount);
     if (!validItems.length || !form.bill_date) return;
-    setUploading(true);
+
+    // Duplicate detection (skip when editing the same bill)
+    const otherBills = bills.filter((b) => b.id !== editingId);
     const total = validItems.reduce((s, it) => s + Number(it.amount), 0);
+    const vendorKey = form.vendor_id && form.vendor_id !== "__other__" ? String(form.vendor_id) : (form.vendor_name || "").toLowerCase().trim();
+
+    let dupWarning = null;
+    if (form.bill_no) {
+      const byNo = otherBills.find((b) => b.bill_no && b.bill_no.trim() === form.bill_no.trim());
+      if (byNo) dupWarning = `Bill number "${form.bill_no}" already exists (${byNo.bill_date}, ${byNo.status}).`;
+    }
+    if (!dupWarning) {
+      const byMatch = otherBills.find((b) => {
+        const bVendor = b.vendor_id ? String(b.vendor_id) : (b.vendor_name || "").toLowerCase().trim();
+        return bVendor === vendorKey && Number(b.amount) === total && b.bill_date === form.bill_date;
+      });
+      if (byMatch) dupWarning = `A bill with the same vendor, amount (${fmt(total)}), and date (${form.bill_date}) already exists (status: ${byMatch.status}).`;
+    }
+    if (dupWarning && !window.confirm(`⚠️ Possible duplicate detected!\n\n${dupWarning}\n\nSave anyway?`)) return;
+
+    setUploading(true);
     let receipt_path = editingId ? (bills.find((b) => b.id === editingId)?.receipt_path || null) : null;
     if (form.receipt_file) {
       const p = await uploadReceipt(form.receipt_file);
