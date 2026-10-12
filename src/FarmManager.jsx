@@ -328,7 +328,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses, advances, setAdvances }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
-        {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
+        {tab === "animals" && <Animals {...{ animals, setAnimals, milk, vaccinations, setVaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections }} types={categoryLists.animal_type} statuses={categoryLists.animal_status} />}
         {tab === "milk" && <MilkProduction {...{ milk, setMilk, animals }} />}
         {tab === "construction" && <Construction {...{ construction, setConstruction }} categories={categoryLists.construction} />}
         {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses, rationLog, setRationLog }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
@@ -1515,7 +1515,7 @@ function ageFromDob(dob) {
   return `${months}m`;
 }
 
-function Animals({ animals, setAnimals, milk, vaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, types = ANIMAL_TYPES, statuses = ANIMAL_STATUSES }) {
+function Animals({ animals, setAnimals, milk, vaccinations, setVaccinations, medicines, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, types = ANIMAL_TYPES, statuses = ANIMAL_STATUSES }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState("");
@@ -1616,7 +1616,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, weights, 
 
   // profile view
   if (selected) {
-    return <AnimalProfile {...{ a: animals.find((x) => x.id === selected.id) || selected, animals, setAnimals, milk, vaccinations, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, openEdit, remove, showForm, animalFormModal, setSelected }} />;
+    return <AnimalProfile {...{ a: animals.find((x) => x.id === selected.id) || selected, animals, setAnimals, milk, vaccinations, setVaccinations, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, openEdit, remove, showForm, animalFormModal, setSelected }} />;
   }
 
   // list view
@@ -1663,7 +1663,7 @@ function Animals({ animals, setAnimals, milk, vaccinations, medicines, weights, 
 }
 
 // ---------- animal profile (weights, breeding, inspections) ----------
-function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, openEdit, remove, showForm, animalFormModal, setSelected }) {
+function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, setVaccinations, weights, setWeights, breedingRecs, setBreedingRecs, inspections, setInspections, openEdit, remove, showForm, animalFormModal, setSelected }) {
   const myMilk = milk.filter((m) => m.animal === a.tag);
   const myVax = vaccinations.filter((v) => v.animal === a.tag);
   const myWeights = weights.filter((w) => w.animal_tag === a.tag).sort((x, y) => x.date > y.date ? 1 : -1);
@@ -1849,11 +1849,38 @@ function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, weights, se
       </div>
 
       {/* Vaccination history */}
-      <div style={{ ...card }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Vaccination history</div>
-        {myVax.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
-          myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next ${v.next_due}` : ""}</div>)}
-      </div>
+      {(() => {
+        const [showVaxForm, setShowVaxForm] = useState(false);
+        const [vaxForm, setVaxForm] = useState({ vaccine: "", date: todayStr(), next_due: "", given_by: "", note: "" });
+        const saveVax = async () => {
+          if (!vaxForm.vaccine) return;
+          const row = { animal: a.tag, vaccine: vaxForm.vaccine, date: vaxForm.date, next_due: vaxForm.next_due || null, given_by: vaxForm.given_by || null, note: vaxForm.note || null };
+          const saved = await insertRow("vaccinations", row);
+          if (saved) { setVaccinations([saved, ...vaccinations]); setShowVaxForm(false); setVaxForm({ vaccine: "", date: todayStr(), next_due: "", given_by: "", note: "" }); }
+        };
+        return (
+          <div style={{ ...card }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>Vaccination history</div>
+              <button onClick={() => setShowVaxForm(!showVaxForm)} style={{ ...primaryBtn, padding: "5px 12px", fontSize: 13 }}><Plus size={14} /> Add</button>
+            </div>
+            {showVaxForm && (
+              <div style={{ background: "#f8fafd", borderRadius: 10, padding: "12px", marginBottom: 12, border: "1px solid #eef1f7" }}>
+                <Field label="Vaccine name"><input value={vaxForm.vaccine} onChange={(e) => setVaxForm({ ...vaxForm, vaccine: e.target.value })} placeholder="e.g. FMD, PPR" style={inputStyle} autoFocus /></Field>
+                <Field label="Date"><input type="date" value={vaxForm.date} onChange={(e) => setVaxForm({ ...vaxForm, date: e.target.value })} style={inputStyle} /></Field>
+                <Field label="Next due (optional)"><input type="date" value={vaxForm.next_due} onChange={(e) => setVaxForm({ ...vaxForm, next_due: e.target.value })} style={inputStyle} /></Field>
+                <Field label="Given by (optional)"><input value={vaxForm.given_by} onChange={(e) => setVaxForm({ ...vaxForm, given_by: e.target.value })} placeholder="Vet name" style={inputStyle} /></Field>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={saveVax} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>Save</button>
+                  <button onClick={() => setShowVaxForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+            {myVax.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
+              myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next due ${v.next_due}` : ""}{v.given_by ? ` · ${v.given_by}` : ""}</div>)}
+          </div>
+        );
+      })()}
 
       {/* Recent milk */}
       {totalMilk > 0 && (
