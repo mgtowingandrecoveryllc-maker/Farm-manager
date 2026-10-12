@@ -217,10 +217,11 @@ function FarmApp({ session, onSignOut }) {
   const [rationLog, setRationLog] = useState([]);
   const [hospitalAdmissions, setHospitalAdmissions] = useState([]);
   const [hospitalTreatments, setHospitalTreatments] = useState([]);
+  const [inventory, setInventory] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -229,11 +230,13 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
       fetchTable("bill_items"), fetchTable("bill_item_names"),
       fetchTable("ration_log"), fetchTable("hospital_admissions"), fetchTable("hospital_treatments"),
+      fetchTable("inventory"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
     setHospitalAdmissions(ha); setHospitalTreatments(ht);
+    setInventory(inv);
     setLoading(false);
   };
 
@@ -303,6 +306,7 @@ function FarmApp({ session, onSignOut }) {
     { id: "animals", label: "Animals", icon: PawPrint },
     { id: "ration", label: "Ration", icon: Package },
     { id: "hospital", label: "Hospital", icon: Stethoscope },
+    { id: "inventory", label: "Inventory", icon: Hammer },
     { id: "reports", label: "Reports", icon: TrendingUp },
   ];
 
@@ -334,6 +338,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "bills" && <Bills {...{ bills, setBills, vendors, profile, session, reload, billItems, setBillItems, billItemNames, setBillItemNames, setExpenses, rationLog, setRationLog }} expenseCats={categoryLists.expense} constructionCats={categoryLists.construction} />}
         {tab === "ration" && <RationInventory rationLog={rationLog} setRationLog={setRationLog} />}
         {tab === "hospital" && <Hospital admissions={hospitalAdmissions} setAdmissions={setHospitalAdmissions} treatments={hospitalTreatments} setTreatments={setHospitalTreatments} animals={animals} medicines={medicines} />}
+        {tab === "inventory" && <Inventory inventory={inventory} setInventory={setInventory} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -1876,8 +1881,27 @@ function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, setVaccinat
                 </div>
               </div>
             )}
-            {myVax.length === 0 ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div> :
-              myVax.map((v) => <div key={v.id} style={{ fontSize: 13, padding: "5px 0", borderBottom: "1px solid #eef1f7" }}>{v.date} · {v.vaccine}{v.next_due ? ` · next due ${v.next_due}` : ""}{v.given_by ? ` · ${v.given_by}` : ""}</div>)}
+            {myVax.length === 0
+              ? <div style={{ color: "#8a93a8", fontSize: 13 }}>None recorded for this animal.</div>
+              : [...myVax].sort((a, b) => b.date.localeCompare(a.date)).map((v) => (
+                <div key={v.id} style={{ padding: "10px 0", borderBottom: "1px solid #eef1f7" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#1e3a5f" }}>{v.vaccine}</div>
+                    <button onClick={async () => { if (window.confirm("Delete this vaccination record?") && await deleteRow("vaccinations", v.id)) setVaccinations(vaccinations.filter((x) => x.id !== v.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#c0392b", padding: 0 }}><Trash2 size={14} /></button>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#5a6478", marginTop: 2 }}>
+                    <span style={{ color: "#8a93a8" }}>Given:</span> {v.date}
+                    {v.given_by && <span> · <span style={{ color: "#8a93a8" }}>By:</span> {v.given_by}</span>}
+                  </div>
+                  {v.next_due && (
+                    <div style={{ fontSize: 12, marginTop: 2, color: daysUntil(v.next_due) < 0 ? "#c0392b" : daysUntil(v.next_due) <= 14 ? "#e8b923" : "#27ae60", fontWeight: 600 }}>
+                      Next due: {v.next_due} {daysUntil(v.next_due) < 0 ? `(overdue by ${Math.abs(daysUntil(v.next_due))}d)` : daysUntil(v.next_due) === 0 ? "(today)" : `(in ${daysUntil(v.next_due)}d)`}
+                    </div>
+                  )}
+                  {v.note && <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{v.note}</div>}
+                </div>
+              ))
+            }
           </div>
         );
       })()}
@@ -3259,6 +3283,160 @@ function RationInventory({ rationLog, setRationLog }) {
           <button onClick={recordUsage} disabled={saving} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, background: "#c0392b", opacity: saving ? 0.6 : 1 }}>
             {saving ? "Saving…" : "Record usage"}
           </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ---------- inventory ----------
+const INV_CATEGORIES = ["Equipment", "Tools", "Machinery", "Vehicles", "Furniture", "Electronics", "Other"];
+const INV_CONDITIONS = ["Good", "Fair", "Poor", "Out of service"];
+const conditionColor = { Good: "#27ae60", Fair: "#e8b923", Poor: "#e67e22", "Out of service": "#c0392b" };
+
+function Inventory({ inventory, setInventory }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [filterCat, setFilterCat] = useState("All");
+  const [filterCond, setFilterCond] = useState("All");
+  const [query, setQuery] = useState("");
+  const blankForm = () => ({ name: "", category: INV_CATEGORIES[0], quantity: "1", purchase_date: "", purchase_price: "", condition: "Good", location: "", note: "" });
+  const [form, setForm] = useState(blankForm());
+
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (item) => {
+    setEditingId(item.id);
+    setForm({ name: item.name, category: item.category || INV_CATEGORIES[0], quantity: String(item.quantity ?? 1), purchase_date: item.purchase_date || "", purchase_price: String(item.purchase_price ?? ""), condition: item.condition || "Good", location: item.location || "", note: item.note || "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.name) return;
+    const row = { name: form.name, category: form.category, quantity: Number(form.quantity) || 1, purchase_date: form.purchase_date || null, purchase_price: form.purchase_price ? Number(form.purchase_price) : null, condition: form.condition, location: form.location || null, note: form.note || null };
+    if (editingId) {
+      if (await updateRow("inventory", editingId, row)) setInventory(inventory.map((i) => i.id === editingId ? { ...i, ...row } : i));
+    } else {
+      const saved = await insertRow("inventory", row);
+      if (saved) setInventory([saved, ...inventory]);
+    }
+    setShowForm(false); setEditingId(null); setForm(blankForm());
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Remove this item from inventory?")) return;
+    if (await deleteRow("inventory", id)) setInventory(inventory.filter((i) => i.id !== id));
+  };
+
+  const updateCondition = async (id, condition) => {
+    if (await updateRow("inventory", id, { condition })) setInventory(inventory.map((i) => i.id === id ? { ...i, condition } : i));
+  };
+
+  const filtered = inventory.filter((i) => {
+    if (filterCat !== "All" && i.category !== filterCat) return false;
+    if (filterCond !== "All" && i.condition !== filterCond) return false;
+    if (query && !i.name.toLowerCase().includes(query.toLowerCase()) && !(i.location || "").toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
+
+  const totalValue = inventory.reduce((s, i) => s + (Number(i.purchase_price) || 0) * (Number(i.quantity) || 1), 0);
+  const poorCount = inventory.filter((i) => i.condition === "Poor" || i.condition === "Out of service").length;
+
+  return (
+    <div>
+      <SectionHeader title="Inventory" onAdd={openAdd} onExport={() => exportCSV("inventory.csv", inventory)} />
+
+      {/* Summary cards */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Total items</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#1e3a5f" }}>{inventory.length}</div>
+        </div>
+        <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Total value</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#1e3a5f" }}>{fmt(totalValue)}</div>
+        </div>
+        {poorCount > 0 && (
+          <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px", background: "#fbeaea", border: "1px solid #f0b8b8" }}>
+            <div style={{ fontSize: 11, color: "#c0392b", fontWeight: 600 }}>Need attention</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#c0392b" }}>{poorCount}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Search */}
+      <div style={{ position: "relative", marginBottom: 10 }}>
+        <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#8a93a8" }} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search items or location…" style={{ ...inputStyle, paddingLeft: 36 }} />
+      </div>
+
+      {/* Category filter */}
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
+        {["All", ...INV_CATEGORIES].map((c) => (
+          <button key={c} onClick={() => setFilterCat(c)} style={{ whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: filterCat === c ? "#1e3a5f" : "white", color: filterCat === c ? "white" : "#3a4a3f" }}>{c}</button>
+        ))}
+      </div>
+
+      {/* Condition filter */}
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 8 }}>
+        {["All", ...INV_CONDITIONS].map((c) => (
+          <button key={c} onClick={() => setFilterCond(c)} style={{ whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: filterCond === c ? (conditionColor[c] || "#1e3a5f") : "white", color: filterCond === c ? "white" : "#3a4a3f" }}>{c}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && <Empty icon={Hammer} text="No items yet. Tap Add to record equipment or tools." />}
+
+      {filtered.map((item) => (
+        <div key={item.id} style={{ ...card, marginBottom: 10, padding: "12px 14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{item.name}{item.quantity > 1 && <span style={{ fontWeight: 500, color: "#8a93a8", fontSize: 13 }}> ×{item.quantity}</span>}</div>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>
+                {item.category}{item.location ? ` · ${item.location}` : ""}
+                {item.purchase_date ? ` · Bought ${item.purchase_date}` : ""}
+              </div>
+              {item.purchase_price && <div style={{ fontSize: 13, color: "#5a6478", marginTop: 2 }}>Value: {fmt(Number(item.purchase_price) * (Number(item.quantity) || 1))}{item.quantity > 1 ? ` (${fmt(item.purchase_price)} each)` : ""}</div>}
+              {item.note && <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{item.note}</div>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: conditionColor[item.condition] + "22", color: conditionColor[item.condition] }}>{item.condition}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => openEdit(item)} style={{ border: "1px solid #cdd6e6", background: "white", borderRadius: 8, padding: "5px 8px", fontSize: 12, cursor: "pointer", color: "#1e3a5f" }}>Edit</button>
+                <button onClick={() => remove(item.id)} style={delBtn}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          </div>
+          {/* Quick condition update */}
+          <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+            {INV_CONDITIONS.map((c) => (
+              <button key={c} onClick={() => updateCondition(item.id, c)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${conditionColor[c]}`, background: item.condition === c ? conditionColor[c] : "white", color: item.condition === c ? "white" : conditionColor[c], fontWeight: 600, cursor: "pointer" }}>{c}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {showForm && (
+        <Modal title={editingId ? "Edit item" : "Add item"} onClose={() => { setShowForm(false); setEditingId(null); }}>
+          <Field label="Item name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Water pump, Tractor, Generator" style={inputStyle} autoFocus /></Field>
+          <Field label="Category">
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
+              {INV_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </Field>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Quantity"><input type="number" inputMode="numeric" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} style={inputStyle} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Condition">
+              <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} style={inputStyle}>
+                {INV_CONDITIONS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </Field></div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Purchase date"><input type="date" value={form.purchase_date} onChange={(e) => setForm({ ...form, purchase_date: e.target.value })} style={inputStyle} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Purchase price (Rs.)"><input type="number" inputMode="decimal" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} placeholder="0" style={inputStyle} /></Field></div>
+          </div>
+          <Field label="Location"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Shed, Store room" style={inputStyle} /></Field>
+          <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
+          <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update item" : "Add to inventory"}</button>
         </Modal>
       )}
     </div>
