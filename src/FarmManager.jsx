@@ -3518,15 +3518,17 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
   const filtered = staff.filter((s) => filterStatus === "All" || s.status === filterStatus);
   const activeCount = staff.filter((s) => s.status === "Active").length;
 
+  const selectedMember = selected ? (staff.find((x) => x.id === selected.id) || selected) : null;
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [idCardUrl, setIdCardUrl] = useState(null);
+  useEffect(() => { setPhotoUrl(null); if (selectedMember?.photo_path) getSignedUrl(selectedMember.photo_path).then(setPhotoUrl); }, [selectedMember?.photo_path]);
+  useEffect(() => { setIdCardUrl(null); if (selectedMember?.id_card_path) getSignedUrl(selectedMember.id_card_path).then(setIdCardUrl); }, [selectedMember?.id_card_path]);
+
   // Detail view
-  if (selected) {
-    const s = staff.find((x) => x.id === selected.id) || selected;
+  if (selected && selectedMember) {
+    const s = selectedMember;
     const leaves = staffLeave.filter((l) => l.staff_id === s.id).sort((a, b) => b.from_date.localeCompare(a.from_date));
     const totalLeaveDays = leaves.reduce((sum, l) => sum + (l.days || 0), 0);
-    const [photoUrl, setPhotoUrl] = useState(null);
-    const [idCardUrl, setIdCardUrl] = useState(null);
-    useEffect(() => { if (s.photo_path) getSignedUrl(s.photo_path).then(setPhotoUrl); }, [s.photo_path]);
-    useEffect(() => { if (s.id_card_path) getSignedUrl(s.id_card_path).then(setIdCardUrl); }, [s.id_card_path]);
 
     return (
       <div>
