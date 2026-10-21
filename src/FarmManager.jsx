@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Wallet, Pill, Syringe, Milk, Plus, Trash2, Search,
   TrendingUp, Calendar, AlertTriangle, X, Download, Home, LogOut, RefreshCw, Hammer, PawPrint, Settings as SettingsIcon,
-  FileText, CheckCircle, XCircle, Clock, Camera, Package, Stethoscope, HeartPulse, ThumbsUp
+  FileText, CheckCircle, XCircle, Clock, Camera, Package, Stethoscope, HeartPulse, ThumbsUp, MessageSquare,
+  Users, UserCheck, Phone, MapPin, CalendarOff
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
-
+import Assistant from "./Assistant";
 // ---------- Supabase data layer ----------
 // Each record type is a table. Rows are shared across everyone who logs in.
 const fetchTable = async (table) => {
@@ -218,10 +219,12 @@ function FarmApp({ session, onSignOut }) {
   const [hospitalAdmissions, setHospitalAdmissions] = useState([]);
   const [hospitalTreatments, setHospitalTreatments] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [staffLeave, setStaffLeave] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -230,13 +233,13 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
       fetchTable("bill_items"), fetchTable("bill_item_names"),
       fetchTable("ration_log"), fetchTable("hospital_admissions"), fetchTable("hospital_treatments"),
-      fetchTable("inventory"),
+      fetchTable("inventory"), fetchTable("staff"), fetchTable("staff_leave"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
     setHospitalAdmissions(ha); setHospitalTreatments(ht);
-    setInventory(inv);
+    setInventory(inv); setStaff(sf); setStaffLeave(sl);
     setLoading(false);
   };
 
@@ -307,7 +310,9 @@ function FarmApp({ session, onSignOut }) {
     { id: "ration", label: "Ration", icon: Package },
     { id: "hospital", label: "Hospital", icon: Stethoscope },
     { id: "inventory", label: "Inventory", icon: Hammer },
+    { id: "staff", label: "Staff", icon: Users },
     { id: "reports", label: "Reports", icon: TrendingUp },
+    { id: "assistant", label: "Assistant", icon: MessageSquare },
   ];
 
   return (
@@ -339,7 +344,9 @@ function FarmApp({ session, onSignOut }) {
         {tab === "ration" && <RationInventory rationLog={rationLog} setRationLog={setRationLog} />}
         {tab === "hospital" && <Hospital admissions={hospitalAdmissions} setAdmissions={setHospitalAdmissions} treatments={hospitalTreatments} setTreatments={setHospitalTreatments} animals={animals} medicines={medicines} />}
         {tab === "inventory" && <Inventory inventory={inventory} setInventory={setInventory} />}
-        {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
+        {tab === "staff" && <Staff staff={staff} setStaff={setStaff} staffLeave={staffLeave} setStaffLeave={setStaffLeave} />}
+        {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}  
+        {tab === "assistant" && <Assistant />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
 
@@ -3437,6 +3444,266 @@ function Inventory({ inventory, setInventory }) {
           <Field label="Location"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Shed, Store room" style={inputStyle} /></Field>
           <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
           <button onClick={save} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6 }}>{editingId ? "Update item" : "Add to inventory"}</button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ---------- staff ----------
+function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
+  const [selected, setSelected] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [showLeaveForm, setShowLeaveForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("All");
+
+  const blankForm = () => ({ full_name: "", id_card_number: "", phone: "", address: "", emergency_contact: "", emergency_phone: "", joining_date: "", salary: "", role: "", status: "Active", note: "", photo_file: null, id_card_file: null, photo_path: null, id_card_path: null });
+  const [form, setForm] = useState(blankForm());
+  const blankLeave = () => ({ from_date: todayStr(), to_date: todayStr(), reason: "", note: "" });
+  const [leaveForm, setLeaveForm] = useState(blankLeave());
+
+  const uploadStaffFile = async (file, folder) => {
+    const blob = await compressImage(file);
+    const path = `${folder}/${Date.now()}_${file.name}`;
+    const { error } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+    if (error) { alert("Upload failed: " + error.message); return null; }
+    return path;
+  };
+
+  const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
+  const openEdit = (s) => {
+    setEditingId(s.id);
+    setForm({ full_name: s.full_name, id_card_number: s.id_card_number || "", phone: s.phone || "", address: s.address || "", emergency_contact: s.emergency_contact || "", emergency_phone: s.emergency_phone || "", joining_date: s.joining_date || "", salary: String(s.salary ?? ""), role: s.role || "", status: s.status || "Active", note: s.note || "", photo_file: null, id_card_file: null, photo_path: s.photo_path || null, id_card_path: s.id_card_path || null });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.full_name) return;
+    setSaving(true);
+    let photo_path = form.photo_path;
+    let id_card_path = form.id_card_path;
+    if (form.photo_file) { const p = await uploadStaffFile(form.photo_file, "staff-photos"); if (p) photo_path = p; }
+    if (form.id_card_file) { const p = await uploadStaffFile(form.id_card_file, "staff-id-cards"); if (p) id_card_path = p; }
+    const row = { full_name: form.full_name, id_card_number: form.id_card_number || null, phone: form.phone || null, address: form.address || null, emergency_contact: form.emergency_contact || null, emergency_phone: form.emergency_phone || null, joining_date: form.joining_date || null, salary: form.salary ? Number(form.salary) : null, role: form.role || null, status: form.status, note: form.note || null, photo_path, id_card_path };
+    if (editingId) {
+      if (await updateRow("staff", editingId, row)) { setStaff(staff.map((s) => s.id === editingId ? { ...s, ...row } : s)); if (selected?.id === editingId) setSelected({ ...selected, ...row }); }
+    } else {
+      const saved = await insertRow("staff", row);
+      if (saved) setStaff([saved, ...staff]);
+    }
+    setShowForm(false); setEditingId(null); setSaving(false);
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Remove this staff member?")) return;
+    if (await deleteRow("staff", id)) { setStaff(staff.filter((s) => s.id !== id)); setSelected(null); }
+  };
+
+  const addLeave = async (staffId) => {
+    if (!leaveForm.from_date || !leaveForm.to_date) return;
+    setSaving(true);
+    const days = Math.max(1, Math.round((new Date(leaveForm.to_date) - new Date(leaveForm.from_date)) / 86400000) + 1);
+    const row = { staff_id: staffId, from_date: leaveForm.from_date, to_date: leaveForm.to_date, days, reason: leaveForm.reason || null, note: leaveForm.note || null };
+    const saved = await insertRow("staff_leave", row);
+    if (saved) { setStaffLeave([saved, ...staffLeave]); setShowLeaveForm(false); setLeaveForm(blankLeave()); }
+    setSaving(false);
+  };
+
+  const removeLeave = async (id) => {
+    if (await deleteRow("staff_leave", id)) setStaffLeave(staffLeave.filter((l) => l.id !== id));
+  };
+
+  const filtered = staff.filter((s) => filterStatus === "All" || s.status === filterStatus);
+  const activeCount = staff.filter((s) => s.status === "Active").length;
+
+  // Detail view
+  if (selected) {
+    const s = staff.find((x) => x.id === selected.id) || selected;
+    const leaves = staffLeave.filter((l) => l.staff_id === s.id).sort((a, b) => b.from_date.localeCompare(a.from_date));
+    const totalLeaveDays = leaves.reduce((sum, l) => sum + (l.days || 0), 0);
+    const [photoUrl, setPhotoUrl] = useState(null);
+    const [idCardUrl, setIdCardUrl] = useState(null);
+    useEffect(() => { if (s.photo_path) getSignedUrl(s.photo_path).then(setPhotoUrl); }, [s.photo_path]);
+    useEffect(() => { if (s.id_card_path) getSignedUrl(s.id_card_path).then(setIdCardUrl); }, [s.id_card_path]);
+
+    return (
+      <div>
+        <button onClick={() => { setSelected(null); setShowLeaveForm(false); }} style={{ background: "none", border: "none", color: "#1e3a5f", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0 }}>← Back</button>
+
+        {/* Profile card */}
+        <div style={{ ...card, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            {photoUrl
+              ? <img src={photoUrl} alt="Staff" style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: "3px solid #e8b923", flexShrink: 0 }} />
+              : <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#eef1f7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><UserCheck size={32} color="#8a93a8" /></div>
+            }
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>{s.full_name}</div>
+              {s.role && <div style={{ fontSize: 13, color: "#8a93a8", marginTop: 2 }}>{s.role}</div>}
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: s.status === "Active" ? "#eafaf1" : "#fbeaea", color: s.status === "Active" ? "#27ae60" : "#c0392b", marginTop: 4, display: "inline-block" }}>{s.status}</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+            {[["ID Card No.", s.id_card_number], ["Phone", s.phone], ["Address", s.address], ["Emergency Contact", s.emergency_contact], ["Emergency Phone", s.emergency_phone], ["Joining Date", s.joining_date], ["Salary", s.salary ? fmt(s.salary) + " / month" : null], ["Note", s.note]].filter(([, v]) => v).map(([label, val]) => (
+              <div key={label} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+                <span style={{ color: "#8a93a8", fontWeight: 600, minWidth: 130, flexShrink: 0 }}>{label}</span>
+                <span style={{ color: "#1e3a5f", fontWeight: 500 }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ID Card photo */}
+        {idCardUrl && (
+          <div style={{ ...card, marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>ID Card</div>
+            <img src={idCardUrl} alt="ID Card" style={{ width: "100%", borderRadius: 8 }} />
+          </div>
+        )}
+
+        {/* Leave history */}
+        <div style={{ ...card, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Leave / Off Duty</div>
+              {totalLeaveDays > 0 && <div style={{ fontSize: 12, color: "#8a93a8" }}>Total: {totalLeaveDays} days off</div>}
+            </div>
+            <button onClick={() => { setLeaveForm(blankLeave()); setShowLeaveForm(!showLeaveForm); }} style={{ ...primaryBtn, padding: "6px 12px", fontSize: 13 }}><Plus size={14} /> Add</button>
+          </div>
+
+          {showLeaveForm && (
+            <div style={{ background: "#f8fafd", borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid #eef1f7" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}><Field label="From"><input type="date" value={leaveForm.from_date} onChange={(e) => setLeaveForm({ ...leaveForm, from_date: e.target.value })} style={inputStyle} /></Field></div>
+                <div style={{ flex: 1 }}><Field label="To"><input type="date" value={leaveForm.to_date} onChange={(e) => setLeaveForm({ ...leaveForm, to_date: e.target.value })} style={inputStyle} /></Field></div>
+              </div>
+              {leaveForm.from_date && leaveForm.to_date && <div style={{ fontSize: 13, color: "#1e3a5f", fontWeight: 700, marginBottom: 8 }}>{Math.max(1, Math.round((new Date(leaveForm.to_date) - new Date(leaveForm.from_date)) / 86400000) + 1)} day(s) off</div>}
+              <Field label="Reason"><input value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="e.g. Sick, Personal, Emergency" style={inputStyle} /></Field>
+              <Field label="Note (optional)"><input value={leaveForm.note} onChange={(e) => setLeaveForm({ ...leaveForm, note: e.target.value })} style={inputStyle} /></Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => addLeave(s.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: saving ? 0.6 : 1 }}>Save</button>
+                <button onClick={() => setShowLeaveForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {leaves.length === 0
+            ? <div style={{ color: "#8a93a8", fontSize: 13 }}>No leave recorded.</div>
+            : leaves.map((l) => (
+              <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{l.from_date}{l.to_date !== l.from_date ? ` → ${l.to_date}` : ""} <span style={{ color: "#c0392b", fontWeight: 700 }}>({l.days}d)</span></div>
+                  {l.reason && <div style={{ fontSize: 12, color: "#8a93a8" }}>{l.reason}</div>}
+                  {l.note && <div style={{ fontSize: 12, color: "#8a93a8" }}>{l.note}</div>}
+                </div>
+                <button onClick={() => removeLeave(l.id)} style={delBtn}><Trash2 size={14} /></button>
+              </div>
+            ))
+          }
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => openEdit(s)} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>Edit profile</button>
+          <button onClick={() => remove(s.id)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#c0392b" }}><Trash2 size={16} /> Remove</button>
+        </div>
+
+        {showForm && (
+          <Modal title="Edit staff member" onClose={() => { setShowForm(false); setEditingId(null); }}>
+            {staffFormFields(form, setForm, saving, save)}
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  const staffFormFields = (form, setForm, saving, save) => (
+    <>
+      <Field label="Full name"><input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Full name" style={inputStyle} autoFocus /></Field>
+      <Field label="Role / Designation"><input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="e.g. Farm worker, Driver, Guard" style={inputStyle} /></Field>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><Field label="Status"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}><option>Active</option><option>Inactive</option><option>Terminated</option></select></Field></div>
+        <div style={{ flex: 1 }}><Field label="Joining date"><input type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} style={inputStyle} /></Field></div>
+      </div>
+      <Field label="Monthly salary (Rs.)"><input type="number" inputMode="decimal" value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+      <Field label="ID card number"><input value={form.id_card_number} onChange={(e) => setForm({ ...form, id_card_number: e.target.value })} placeholder="e.g. 37405-1234567-9" style={inputStyle} /></Field>
+      <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92..." style={inputStyle} /></Field>
+      <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Emergency contact name"><input value={form.emergency_contact} onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Emergency contact phone"><input value={form.emergency_phone} onChange={(e) => setForm({ ...form, emergency_phone: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Employee photo">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.photo_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+          <Camera size={16} />{form.photo_file ? form.photo_file.name : (form.photo_path ? "Replace photo" : "Take / choose photo")}
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, photo_file: e.target.files[0] || null })} />
+        </label>
+      </Field>
+      <Field label="ID card photo">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.id_card_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+          <Camera size={16} />{form.id_card_file ? form.id_card_file.name : (form.id_card_path ? "Replace ID card photo" : "Take / choose ID card photo")}
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, id_card_file: e.target.files[0] || null })} />
+        </label>
+      </Field>
+      <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
+      <button onClick={save} disabled={saving} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : (editingId ? "Update" : "Add staff member")}</button>
+    </>
+  );
+
+  // List view
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 18, color: "#1e3a5f", display: "flex", alignItems: "center", gap: 8 }}><Users size={20} /> Staff</div>
+        <button onClick={openAdd} style={primaryBtn}><Plus size={16} /> Add staff</button>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Total staff</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#1e3a5f" }}>{staff.length}</div>
+        </div>
+        <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Active</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#27ae60" }}>{activeCount}</div>
+        </div>
+        <div style={{ ...card, marginBottom: 0, flex: 1, padding: "10px 12px" }}>
+          <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600 }}>Monthly payroll</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1e3a5f" }}>{fmt(staff.filter((s) => s.status === "Active").reduce((sum, s) => sum + (Number(s.salary) || 0), 0))}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {["All", "Active", "Inactive", "Terminated"].map((s) => (
+          <button key={s} onClick={() => setFilterStatus(s)} style={{ flex: 1, border: "1px solid #cdd6e6", borderRadius: 20, padding: "7px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: filterStatus === s ? "#1e3a5f" : "white", color: filterStatus === s ? "white" : "#3a4a3f" }}>{s}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && <Empty icon={Users} text="No staff added yet. Tap Add staff to begin." />}
+
+      {filtered.map((s) => {
+        const leaveDays = staffLeave.filter((l) => l.staff_id === s.id).reduce((sum, l) => sum + (l.days || 0), 0);
+        return (
+          <div key={s.id} onClick={() => setSelected(s)} style={{ ...card, marginBottom: 10, cursor: "pointer", padding: "12px 14px", display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#eef1f7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+              <UserCheck size={24} color="#8a93a8" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{s.full_name}</div>
+              <div style={{ fontSize: 12, color: "#8a93a8", marginTop: 2 }}>{s.role || "Staff"}{s.phone ? ` · ${s.phone}` : ""}</div>
+              {leaveDays > 0 && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 2 }}><CalendarOff size={11} style={{ verticalAlign: "middle" }} /> {leaveDays} days off total</div>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 8, background: s.status === "Active" ? "#eafaf1" : "#fbeaea", color: s.status === "Active" ? "#27ae60" : "#c0392b" }}>{s.status}</span>
+              {s.salary && <span style={{ fontSize: 12, color: "#5a6478", fontWeight: 600 }}>{fmt(s.salary)}/mo</span>}
+            </div>
+          </div>
+        );
+      })}
+
+      {showForm && (
+        <Modal title={editingId ? "Edit staff member" : "Add staff member"} onClose={() => { setShowForm(false); setEditingId(null); }}>
+          {staffFormFields(form, setForm, saving, save)}
         </Modal>
       )}
     </div>
