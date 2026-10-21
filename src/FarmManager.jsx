@@ -3524,6 +3524,37 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
   useEffect(() => { setPhotoUrl(null); if (selectedMember?.photo_path) getSignedUrl(selectedMember.photo_path).then(setPhotoUrl); }, [selectedMember?.photo_path]);
   useEffect(() => { setIdCardUrl(null); if (selectedMember?.id_card_path) getSignedUrl(selectedMember.id_card_path).then(setIdCardUrl); }, [selectedMember?.id_card_path]);
 
+  const staffFormFields = (form, setForm, saving, onSave) => (
+    <>
+      <Field label="Full name"><input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Full name" style={inputStyle} autoFocus /></Field>
+      <Field label="Role / Designation"><input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="e.g. Farm worker, Driver, Guard" style={inputStyle} /></Field>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><Field label="Status"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}><option>Active</option><option>Inactive</option><option>Terminated</option></select></Field></div>
+        <div style={{ flex: 1 }}><Field label="Joining date"><input type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} style={inputStyle} /></Field></div>
+      </div>
+      <Field label="Monthly salary (Rs.)"><input type="number" inputMode="decimal" value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} placeholder="0" style={inputStyle} /></Field>
+      <Field label="ID card number"><input value={form.id_card_number} onChange={(e) => setForm({ ...form, id_card_number: e.target.value })} placeholder="e.g. 37405-1234567-9" style={inputStyle} /></Field>
+      <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92..." style={inputStyle} /></Field>
+      <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Emergency contact name"><input value={form.emergency_contact} onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Emergency contact phone"><input value={form.emergency_phone} onChange={(e) => setForm({ ...form, emergency_phone: e.target.value })} style={inputStyle} /></Field>
+      <Field label="Employee photo">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.photo_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+          <Camera size={16} />{form.photo_file ? form.photo_file.name : (form.photo_path ? "Replace photo" : "Take / choose photo")}
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, photo_file: e.target.files[0] || null })} />
+        </label>
+      </Field>
+      <Field label="ID card photo">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.id_card_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
+          <Camera size={16} />{form.id_card_file ? form.id_card_file.name : (form.id_card_path ? "Replace ID card photo" : "Take / choose ID card photo")}
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, id_card_file: e.target.files[0] || null })} />
+        </label>
+      </Field>
+      <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
+      <button onClick={onSave} disabled={saving} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : (editingId ? "Update" : "Add staff member")}</button>
+    </>
+  );
+
   // Detail view
   if (selected && selectedMember) {
     const s = selectedMember;
@@ -3620,37 +3651,6 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
       </div>
     );
   }
-
-  const staffFormFields = (form, setForm, saving, save) => (
-    <>
-      <Field label="Full name"><input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Full name" style={inputStyle} autoFocus /></Field>
-      <Field label="Role / Designation"><input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="e.g. Farm worker, Driver, Guard" style={inputStyle} /></Field>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1 }}><Field label="Status"><select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} style={inputStyle}><option>Active</option><option>Inactive</option><option>Terminated</option></select></Field></div>
-        <div style={{ flex: 1 }}><Field label="Joining date"><input type="date" value={form.joining_date} onChange={(e) => setForm({ ...form, joining_date: e.target.value })} style={inputStyle} /></Field></div>
-      </div>
-      <Field label="Monthly salary (Rs.)"><input type="number" inputMode="decimal" value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} placeholder="0" style={inputStyle} /></Field>
-      <Field label="ID card number"><input value={form.id_card_number} onChange={(e) => setForm({ ...form, id_card_number: e.target.value })} placeholder="e.g. 37405-1234567-9" style={inputStyle} /></Field>
-      <Field label="Phone"><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+92..." style={inputStyle} /></Field>
-      <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} /></Field>
-      <Field label="Emergency contact name"><input value={form.emergency_contact} onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })} style={inputStyle} /></Field>
-      <Field label="Emergency contact phone"><input value={form.emergency_phone} onChange={(e) => setForm({ ...form, emergency_phone: e.target.value })} style={inputStyle} /></Field>
-      <Field label="Employee photo">
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.photo_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
-          <Camera size={16} />{form.photo_file ? form.photo_file.name : (form.photo_path ? "Replace photo" : "Take / choose photo")}
-          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, photo_file: e.target.files[0] || null })} />
-        </label>
-      </Field>
-      <Field label="ID card photo">
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.id_card_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
-          <Camera size={16} />{form.id_card_file ? form.id_card_file.name : (form.id_card_path ? "Replace ID card photo" : "Take / choose ID card photo")}
-          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setForm({ ...form, id_card_file: e.target.files[0] || null })} />
-        </label>
-      </Field>
-      <Field label="Note (optional)"><input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} style={inputStyle} /></Field>
-      <button onClick={save} disabled={saving} style={{ ...primaryBtn, width: "100%", justifyContent: "center", marginTop: 6, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : (editingId ? "Update" : "Add staff member")}</button>
-    </>
-  );
 
   // List view
   return (
