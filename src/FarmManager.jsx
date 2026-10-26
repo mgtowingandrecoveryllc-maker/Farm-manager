@@ -350,25 +350,26 @@ function FarmApp({ session, onSignOut }) {
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", zIndex: 10, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 12px rgba(0,0,0,0.07)" }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", overflowX: "auto", overflowY: "hidden", zIndex: 10, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 12px rgba(0,0,0,0.07)", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+        <style>{`nav::-webkit-scrollbar { display: none; }`}</style>
         {tabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
           return (
-            <button key={t.id} onClick={() => setTab(t.id)} title={t.label} style={{
-              flex: 1, border: "none", background: active ? "#f0f4fb" : "none", padding: "10px 0 8px",
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: "0 0 auto", width: `${Math.floor(100 / Math.min(tabs.length, 6))}vw`, minWidth: 56, border: "none", background: "none", padding: "10px 2px 8px",
               color: active ? "#1e3a5f" : "#9aa3b0", display: "flex", flexDirection: "column",
-              alignItems: "center", gap: 3, cursor: "pointer", fontSize: 8, fontWeight: active ? 700 : 500,
-              minWidth: 0, borderTop: active ? "3px solid #e8b923" : "3px solid transparent", marginTop: -1,
+              alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, fontWeight: active ? 700 : 500,
+              borderTop: active ? "3px solid #e8b923" : "3px solid transparent", marginTop: -1,
               WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
             }}>
               <div style={{ position: "relative" }}>
-                <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
+                <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
                 {t.badge > 0 && (
-                  <span style={{ position: "absolute", top: -4, right: -7, background: "#c0392b", color: "white", borderRadius: "50%", width: 14, height: 14, fontSize: 8, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
+                  <span style={{ position: "absolute", top: -5, right: -8, background: "#c0392b", color: "white", borderRadius: "50%", width: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
                 )}
               </div>
-              <span style={{ fontSize: 8, lineHeight: 1 }}>{t.label}</span>
+              {t.label}
             </button>
           );
         })}
