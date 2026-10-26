@@ -3461,7 +3461,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
 
   const blankForm = () => ({ full_name: "", id_card_number: "", phone: "", address: "", emergency_contact: "", emergency_phone: "", joining_date: "", salary: "", role: "", status: "Active", note: "", photo_file: null, id_card_file: null, photo_path: null, id_card_path: null });
   const [form, setForm] = useState(blankForm());
-  const blankLeave = () => ({ from_date: todayStr(), to_date: todayStr(), reason: "", note: "", deduct_salary: false });
+  const blankLeave = () => ({ from_date: todayStr(), to_date: todayStr(), reason: "", note: "" });
   const [leaveForm, setLeaveForm] = useState(blankLeave());
 
   const uploadStaffFile = async (file, folder) => {
@@ -3505,15 +3505,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
     if (!leaveForm.from_date || !leaveForm.to_date) return;
     setSaving(true);
     const days = Math.max(1, Math.round((new Date(leaveForm.to_date) - new Date(leaveForm.from_date)) / 86400000) + 1);
-    const member = staff.find((x) => x.id === staffId);
-    const dailyRate = member?.salary ? Number(member.salary) / 30 : 0;
-    // Count free days already used this month (1 free off per month per employee)
-    const monthKey = leaveForm.from_date.slice(0, 7);
-    const usedThisMonth = staffLeave.filter((l) => l.staff_id === staffId && (l.from_date || "").startsWith(monthKey)).reduce((s, l) => s + (l.days || 0), 0);
-    const freeRemaining = Math.max(0, 1 - usedThisMonth);
-    const deductibleDays = leaveForm.deduct_salary ? Math.max(0, days - freeRemaining) : 0;
-    const deduct_amount = Math.round(deductibleDays * dailyRate);
-    const row = { staff_id: staffId, from_date: leaveForm.from_date, to_date: leaveForm.to_date, days, reason: leaveForm.reason || null, note: leaveForm.note || null, deduct_salary: leaveForm.deduct_salary, deduct_amount };
+    const row = { staff_id: staffId, from_date: leaveForm.from_date, to_date: leaveForm.to_date, days, reason: leaveForm.reason || null, note: leaveForm.note || null };
     const saved = await insertRow("staff_leave", row);
     if (saved) { setStaffLeave([saved, ...staffLeave]); setShowLeaveForm(false); setLeaveForm(blankLeave()); }
     setSaving(false);
@@ -3568,7 +3560,6 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
     const s = selectedMember;
     const leaves = staffLeave.filter((l) => l.staff_id === s.id).sort((a, b) => b.from_date.localeCompare(a.from_date));
     const totalLeaveDays = leaves.reduce((sum, l) => sum + (l.days || 0), 0);
-    const totalDeductions = leaves.reduce((sum, l) => sum + (Number(l.deduct_amount) || 0), 0);
 
     return (
       <div>
@@ -3589,7 +3580,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
           </div>
 
           <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-            {[["ID Card No.", s.id_card_number], ["Phone", s.phone], ["Address", s.address], ["Emergency Contact", s.emergency_contact], ["Emergency Phone", s.emergency_phone], ["Joining Date", s.joining_date], ["Monthly Salary", s.salary ? `Rs. ${fmt(s.salary)}` : null], ["Total Deductions", totalDeductions > 0 ? `Rs. ${fmt(totalDeductions)}` : null], ["Note", s.note]].filter(([, v]) => v).map(([label, val]) => (
+            {[["ID Card No.", s.id_card_number], ["Phone", s.phone], ["Address", s.address], ["Emergency Contact", s.emergency_contact], ["Emergency Phone", s.emergency_phone], ["Joining Date", s.joining_date], ["Salary", s.salary ? fmt(s.salary) + " / month" : null], ["Note", s.note]].filter(([, v]) => v).map(([label, val]) => (
               <div key={label} style={{ display: "flex", gap: 8, fontSize: 13 }}>
                 <span style={{ color: "#8a93a8", fontWeight: 600, minWidth: 130, flexShrink: 0 }}>{label}</span>
                 <span style={{ color: "#1e3a5f", fontWeight: 500 }}>{val}</span>
@@ -3611,67 +3602,35 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Leave / Off Duty</div>
-              {totalLeaveDays > 0 && <div style={{ fontSize: 12, color: "#8a93a8" }}>Total: {totalLeaveDays} days off{totalDeductions > 0 ? ` · Rs. ${fmt(totalDeductions)} deducted` : ""}</div>}
+              {totalLeaveDays > 0 && <div style={{ fontSize: 12, color: "#8a93a8" }}>Total: {totalLeaveDays} days off</div>}
             </div>
             <button onClick={() => { setLeaveForm(blankLeave()); setShowLeaveForm(!showLeaveForm); }} style={{ ...primaryBtn, padding: "6px 12px", fontSize: 13 }}><Plus size={14} /> Add</button>
           </div>
 
-          {showLeaveForm && (() => {
-            const lDays = leaveForm.from_date && leaveForm.to_date ? Math.max(1, Math.round((new Date(leaveForm.to_date) - new Date(leaveForm.from_date)) / 86400000) + 1) : 0;
-            const monthKey = leaveForm.from_date ? leaveForm.from_date.slice(0, 7) : "";
-            const usedThisMonth = staffLeave.filter((l) => l.staff_id === s.id && (l.from_date || "").startsWith(monthKey)).reduce((sm, l) => sm + (l.days || 0), 0);
-            const freeRemaining = Math.max(0, 1 - usedThisMonth);
-            const deductibleDays = leaveForm.deduct_salary ? Math.max(0, lDays - freeRemaining) : 0;
-            const dailyRate = s.salary ? Number(s.salary) / 30 : 0;
-            const deductAmt = Math.round(deductibleDays * dailyRate);
-            return (
-              <div style={{ background: "#f8fafd", borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid #eef1f7" }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <div style={{ flex: 1 }}><Field label="From"><input type="date" value={leaveForm.from_date} onChange={(e) => setLeaveForm({ ...leaveForm, from_date: e.target.value })} style={inputStyle} /></Field></div>
-                  <div style={{ flex: 1 }}><Field label="To"><input type="date" value={leaveForm.to_date} onChange={(e) => setLeaveForm({ ...leaveForm, to_date: e.target.value })} style={inputStyle} /></Field></div>
-                </div>
-                {lDays > 0 && (
-                  <div style={{ fontSize: 13, color: "#1e3a5f", fontWeight: 700, marginBottom: 8 }}>
-                    {lDays} day(s) off · {freeRemaining > 0 ? `${freeRemaining} free day(s) available this month` : "No free days left this month"}
-                  </div>
-                )}
-                <Field label="Reason"><input value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="e.g. Sick, Personal, Emergency" style={inputStyle} /></Field>
-                <Field label="Note (optional)"><input value={leaveForm.note} onChange={(e) => setLeaveForm({ ...leaveForm, note: e.target.value })} style={inputStyle} /></Field>
-                {/* Deduct salary toggle */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "10px 0 6px", padding: "10px 12px", background: leaveForm.deduct_salary ? "#fdf3f3" : "#f0f4fa", borderRadius: 10, border: `1px solid ${leaveForm.deduct_salary ? "#f5c6c6" : "#dde4f0"}` }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1, fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>
-                    <input type="checkbox" checked={leaveForm.deduct_salary} onChange={(e) => setLeaveForm({ ...leaveForm, deduct_salary: e.target.checked })} style={{ width: 18, height: 18, cursor: "pointer" }} />
-                    Deduct salary for extra days
-                  </label>
-                </div>
-                {leaveForm.deduct_salary && lDays > 0 && (
-                  <div style={{ fontSize: 13, padding: "8px 10px", borderRadius: 8, background: deductibleDays > 0 ? "#fbeaea" : "#eafaf1", color: deductibleDays > 0 ? "#c0392b" : "#27ae60", fontWeight: 700, marginBottom: 8 }}>
-                    {deductibleDays > 0
-                      ? `${deductibleDays} deductible day(s) × Rs. ${Math.round(dailyRate)}/day = Rs. ${fmt(deductAmt)} deduction`
-                      : "All days covered by free monthly off — no deduction"}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => addLeave(s.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: saving ? 0.6 : 1 }}>Save</button>
-                  <button onClick={() => setShowLeaveForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
-                </div>
+          {showLeaveForm && (
+            <div style={{ background: "#f8fafd", borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid #eef1f7" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}><Field label="From"><input type="date" value={leaveForm.from_date} onChange={(e) => setLeaveForm({ ...leaveForm, from_date: e.target.value })} style={inputStyle} /></Field></div>
+                <div style={{ flex: 1 }}><Field label="To"><input type="date" value={leaveForm.to_date} onChange={(e) => setLeaveForm({ ...leaveForm, to_date: e.target.value })} style={inputStyle} /></Field></div>
               </div>
-            );
-          })()}
+              {leaveForm.from_date && leaveForm.to_date && <div style={{ fontSize: 13, color: "#1e3a5f", fontWeight: 700, marginBottom: 8 }}>{Math.max(1, Math.round((new Date(leaveForm.to_date) - new Date(leaveForm.from_date)) / 86400000) + 1)} day(s) off</div>}
+              <Field label="Reason"><input value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="e.g. Sick, Personal, Emergency" style={inputStyle} /></Field>
+              <Field label="Note (optional)"><input value={leaveForm.note} onChange={(e) => setLeaveForm({ ...leaveForm, note: e.target.value })} style={inputStyle} /></Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => addLeave(s.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: saving ? 0.6 : 1 }}>Save</button>
+                <button onClick={() => setShowLeaveForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+              </div>
+            </div>
+          )}
 
           {leaves.length === 0
             ? <div style={{ color: "#8a93a8", fontSize: 13 }}>No leave recorded.</div>
             : leaves.map((l) => (
               <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
-                <div style={{ flex: 1 }}>
+                <div>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{l.from_date}{l.to_date !== l.from_date ? ` → ${l.to_date}` : ""} <span style={{ color: "#c0392b", fontWeight: 700 }}>({l.days}d)</span></div>
                   {l.reason && <div style={{ fontSize: 12, color: "#8a93a8" }}>{l.reason}</div>}
                   {l.note && <div style={{ fontSize: 12, color: "#8a93a8" }}>{l.note}</div>}
-                  {l.deduct_salary && Number(l.deduct_amount) > 0
-                    ? <div style={{ fontSize: 12, fontWeight: 700, color: "#c0392b", marginTop: 2 }}>Deducted: Rs. {fmt(l.deduct_amount)}</div>
-                    : l.deduct_salary
-                      ? <div style={{ fontSize: 12, color: "#27ae60", fontWeight: 600, marginTop: 2 }}>Covered by free monthly off</div>
-                      : null}
                 </div>
                 <button onClick={() => removeLeave(l.id)} style={delBtn}><Trash2 size={14} /></button>
               </div>
