@@ -1687,6 +1687,23 @@ function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, setVaccinat
   const prevWeight = myWeights[myWeights.length - 2];
   const weightDelta = latestWeight && prevWeight ? (Number(latestWeight.weight_kg) - Number(prevWeight.weight_kg)).toFixed(1) : null;
 
+  // Animal photo
+  const [animalPhotoUrl, setAnimalPhotoUrl] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  useEffect(() => { setAnimalPhotoUrl(null); if (a.photo_path) getSignedUrl(a.photo_path).then(setAnimalPhotoUrl); }, [a.photo_path]);
+  const handleAnimalPhoto = async (file) => {
+    if (!file) return;
+    setUploadingPhoto(true);
+    const blob = await compressImage(file);
+    const path = `animal-photos/${Date.now()}_${file.name}`;
+    const { error } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+    if (error) { alert("Upload failed: " + error.message); setUploadingPhoto(false); return; }
+    await updateRow("animals", a.id, { photo_path: path });
+    setAnimals(animals.map((x) => x.id === a.id ? { ...x, photo_path: path } : x));
+    getSignedUrl(path).then(setAnimalPhotoUrl);
+    setUploadingPhoto(false);
+  };
+
   // Weight form
   const [showWF, setShowWF] = useState(false);
   const [wForm, setWForm] = useState({ date: todayStr(), weight_kg: "", note: "" });
@@ -1726,12 +1743,26 @@ function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, setVaccinat
 
       {/* Header card */}
       <div style={{ ...card }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>{a.tag}{a.sex ? <span style={{ fontSize: 15, color: "#9aa89e", marginLeft: 8 }}>{a.sex === "Female" ? "♀" : "♂"}</span> : null}</div>
-            <div style={{ fontSize: 13, color: "#7a8c7f", marginTop: 3 }}>{a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)} old` : ""}</div>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          {/* Photo */}
+          <label style={{ cursor: "pointer", flexShrink: 0 }} title="Tap to change photo">
+            <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleAnimalPhoto(e.target.files[0])} />
+            {animalPhotoUrl
+              ? <img src={animalPhotoUrl} alt={a.tag} style={{ width: 80, height: 80, borderRadius: 14, objectFit: "cover", border: "3px solid #e8b923", display: "block" }} />
+              : <div style={{ width: 80, height: 80, borderRadius: 14, background: "#eef1f7", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed #cdd6e6", gap: 4 }}>
+                  {uploadingPhoto ? <span style={{ fontSize: 11, color: "#8a93a8" }}>Uploading…</span> : <><Camera size={24} color="#8a93a8" /><span style={{ fontSize: 10, color: "#8a93a8" }}>Add photo</span></>}
+                </div>
+            }
+          </label>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{a.tag}{a.sex ? <span style={{ fontSize: 15, color: "#9aa89e", marginLeft: 8 }}>{a.sex === "Female" ? "♀" : "♂"}</span> : null}</div>
+                <div style={{ fontSize: 13, color: "#7a8c7f", marginTop: 3 }}>{a.type}{a.breed ? ` · ${a.breed}` : ""}{a.dob ? ` · ${ageFromDob(a.dob)} old` : ""}</div>
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: isInactive ? "#c0392b" : "#1e3a5f", background: isInactive ? "#fdf0f0" : "#eef1f7", padding: "4px 10px", borderRadius: 8, flexShrink: 0 }}>{a.status || "Active"}</span>
+            </div>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 700, color: isInactive ? "#c0392b" : "#1e3a5f", background: isInactive ? "#fdf0f0" : "#eef1f7", padding: "4px 10px", borderRadius: 8 }}>{a.status || "Active"}</span>
         </div>
         {isGoat && (a.mother_tag || a.group_code || a.teeth || a.grade) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: 10 }}>
