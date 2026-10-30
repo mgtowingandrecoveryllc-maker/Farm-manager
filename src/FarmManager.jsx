@@ -3577,6 +3577,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
   const selectedMember = selected ? (staff.find((x) => x.id === selected.id) || selected) : null;
   const [photoUrl, setPhotoUrl] = useState(null);
   const [idCardUrl, setIdCardUrl] = useState(null);
+  const [fullPhoto, setFullPhoto] = useState(null); // url to show in lightbox
   useEffect(() => { setPhotoUrl(null); if (selectedMember?.photo_path) getSignedUrl(selectedMember.photo_path).then(setPhotoUrl); }, [selectedMember?.photo_path]);
   useEffect(() => { setIdCardUrl(null); if (selectedMember?.id_card_path) getSignedUrl(selectedMember.id_card_path).then(setIdCardUrl); }, [selectedMember?.id_card_path]);
 
@@ -3626,7 +3627,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
         <div style={{ ...card, marginBottom: 12 }}>
           <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
             {photoUrl
-              ? <img src={photoUrl} alt="Staff" style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: "3px solid #e8b923", flexShrink: 0 }} />
+              ? <img src={photoUrl} alt="Staff" onClick={() => setFullPhoto(photoUrl)} style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: "3px solid #e8b923", flexShrink: 0, cursor: "zoom-in" }} />
               : <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#eef1f7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><UserCheck size={32} color="#8a93a8" /></div>
             }
             <div style={{ flex: 1 }}>
@@ -3650,7 +3651,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
         {idCardUrl && (
           <div style={{ ...card, marginBottom: 12 }}>
             <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>ID Card</div>
-            <img src={idCardUrl} alt="ID Card" style={{ width: "100%", borderRadius: 8 }} />
+            <img src={idCardUrl} alt="ID Card" onClick={() => setFullPhoto(idCardUrl)} style={{ width: "100%", borderRadius: 8, cursor: "zoom-in" }} />
           </div>
         )}
 
@@ -3736,6 +3737,14 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
           <Modal title="Edit staff member" onClose={() => { setShowForm(false); setEditingId(null); }}>
             {staffFormFields(form, setForm, saving, save)}
           </Modal>
+        )}
+
+        {/* Full-size photo lightbox */}
+        {fullPhoto && (
+          <div onClick={() => setFullPhoto(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button onClick={() => setFullPhoto(null)} style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 40, height: 40, color: "white", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            <img src={fullPhoto} alt="Full view" style={{ maxWidth: "95vw", maxHeight: "90vh", borderRadius: 12, objectFit: "contain" }} onClick={(e) => e.stopPropagation()} />
+          </div>
         )}
       </div>
     );
