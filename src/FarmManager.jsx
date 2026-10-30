@@ -1690,6 +1690,7 @@ function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, setVaccinat
   // Animal photo
   const [animalPhotoUrl, setAnimalPhotoUrl] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showFullPhoto, setShowFullPhoto] = useState(false);
   useEffect(() => { setAnimalPhotoUrl(null); if (a.photo_path) getSignedUrl(a.photo_path).then(setAnimalPhotoUrl); }, [a.photo_path]);
   const handleAnimalPhoto = async (file) => {
     if (!file) return;
@@ -1745,15 +1746,30 @@ function AnimalProfile({ a, animals, setAnimals, milk, vaccinations, setVaccinat
       <div style={{ ...card }}>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           {/* Photo */}
-          <label style={{ cursor: "pointer", flexShrink: 0 }} title="Tap to change photo">
-            <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleAnimalPhoto(e.target.files[0])} />
+          <div style={{ position: "relative", flexShrink: 0 }}>
             {animalPhotoUrl
-              ? <img src={animalPhotoUrl} alt={a.tag} style={{ width: 80, height: 80, borderRadius: 14, objectFit: "cover", border: "3px solid #e8b923", display: "block" }} />
-              : <div style={{ width: 80, height: 80, borderRadius: 14, background: "#eef1f7", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed #cdd6e6", gap: 4 }}>
-                  {uploadingPhoto ? <span style={{ fontSize: 11, color: "#8a93a8" }}>Uploading…</span> : <><Camera size={24} color="#8a93a8" /><span style={{ fontSize: 10, color: "#8a93a8" }}>Add photo</span></>}
-                </div>
+              ? <>
+                  <img src={animalPhotoUrl} alt={a.tag} onClick={() => setShowFullPhoto(true)} style={{ width: 80, height: 80, borderRadius: 14, objectFit: "cover", border: "3px solid #e8b923", display: "block", cursor: "zoom-in" }} />
+                  <label style={{ position: "absolute", bottom: -6, right: -6, background: "#1e3a5f", borderRadius: "50%", width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: "2px solid white" }} title="Change photo">
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleAnimalPhoto(e.target.files[0])} />
+                    <Camera size={13} color="white" />
+                  </label>
+                </>
+              : <label style={{ cursor: "pointer" }} title="Add photo">
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleAnimalPhoto(e.target.files[0])} />
+                  <div style={{ width: 80, height: 80, borderRadius: 14, background: "#eef1f7", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "2px dashed #cdd6e6", gap: 4 }}>
+                    {uploadingPhoto ? <span style={{ fontSize: 11, color: "#8a93a8" }}>Uploading…</span> : <><Camera size={24} color="#8a93a8" /><span style={{ fontSize: 10, color: "#8a93a8" }}>Add photo</span></>}
+                  </div>
+                </label>
             }
-          </label>
+          </div>
+          {/* Full-size photo lightbox */}
+          {showFullPhoto && animalPhotoUrl && (
+            <div onClick={() => setShowFullPhoto(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <button onClick={() => setShowFullPhoto(false)} style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 40, height: 40, color: "white", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+              <img src={animalPhotoUrl} alt={a.tag} style={{ maxWidth: "95vw", maxHeight: "90vh", borderRadius: 12, objectFit: "contain" }} onClick={(e) => e.stopPropagation()} />
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
