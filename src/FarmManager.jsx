@@ -221,10 +221,11 @@ function FarmApp({ session, onSignOut }) {
   const [inventory, setInventory] = useState([]);
   const [staff, setStaff] = useState([]);
   const [staffLeave, setStaffLeave] = useState([]);
+  const [staffPayments, setStaffPayments] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl, sp] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -233,13 +234,13 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("weights"), fetchTable("breeding"), fetchTable("inspections"),
       fetchTable("bill_items"), fetchTable("bill_item_names"),
       fetchTable("ration_log"), fetchTable("hospital_admissions"), fetchTable("hospital_treatments"),
-      fetchTable("inventory"), fetchTable("staff"), fetchTable("staff_leave"),
+      fetchTable("inventory"), fetchTable("staff"), fetchTable("staff_leave"), fetchTable("staff_salary_payments"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
     setHospitalAdmissions(ha); setHospitalTreatments(ht);
-    setInventory(inv); setStaff(sf); setStaffLeave(sl);
+    setInventory(inv); setStaff(sf); setStaffLeave(sl); setStaffPayments(sp);
     setLoading(false);
   };
 
@@ -344,7 +345,7 @@ function FarmApp({ session, onSignOut }) {
         {tab === "ration" && <RationInventory rationLog={rationLog} setRationLog={setRationLog} />}
         {tab === "hospital" && <Hospital admissions={hospitalAdmissions} setAdmissions={setHospitalAdmissions} treatments={hospitalTreatments} setTreatments={setHospitalTreatments} animals={animals} medicines={medicines} />}
         {tab === "inventory" && <Inventory inventory={inventory} setInventory={setInventory} />}
-        {tab === "staff" && <Staff staff={staff} setStaff={setStaff} staffLeave={staffLeave} setStaffLeave={setStaffLeave} />}
+        {tab === "staff" && <Staff staff={staff} setStaff={setStaff} staffLeave={staffLeave} setStaffLeave={setStaffLeave} staffPayments={staffPayments} setStaffPayments={setStaffPayments} />}
         {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}  
         {tab === "assistant" && <Assistant />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
@@ -3499,7 +3500,7 @@ function Inventory({ inventory, setInventory }) {
 }
 
 // ---------- staff ----------
-function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
+function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setStaffPayments }) {
   const [selected, setSelected] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -3511,6 +3512,23 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
   const [form, setForm] = useState(blankForm());
   const blankLeave = () => ({ from_date: todayStr(), to_date: todayStr(), reason: "", note: "", deduct_salary: false });
   const [leaveForm, setLeaveForm] = useState(blankLeave());
+
+  const [showPayForm, setShowPayForm] = useState(false);
+  const blankPay = () => ({ month: todayStr().slice(0, 7), amount: "", paid_date: todayStr(), note: "" });
+  const [payForm, setPayForm] = useState(blankPay());
+
+  const addPayment = async (staffId) => {
+    if (!payForm.amount || !payForm.month) return;
+    setSaving(true);
+    const row = { staff_id: staffId, month: payForm.month, amount: Number(payForm.amount), paid_date: payForm.paid_date || todayStr(), note: payForm.note || null };
+    const saved = await insertRow("staff_salary_payments", row);
+    if (saved) { setStaffPayments([saved, ...staffPayments]); setShowPayForm(false); setPayForm(blankPay()); }
+    setSaving(false);
+  };
+
+  const removePayment = async (id) => {
+    if (await deleteRow("staff_salary_payments", id)) setStaffPayments(staffPayments.filter((p) => p.id !== id));
+  };
 
   const uploadStaffFile = async (file, folder) => {
     const blob = await compressImage(file);
@@ -3618,6 +3636,8 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
     const leaves = staffLeave.filter((l) => l.staff_id === s.id).sort((a, b) => b.from_date.localeCompare(a.from_date));
     const totalLeaveDays = leaves.reduce((sum, l) => sum + (l.days || 0), 0);
     const totalDeductions = leaves.reduce((sum, l) => sum + (Number(l.deduct_amount) || 0), 0);
+    const payments = (staffPayments || []).filter((p) => p.staff_id === s.id).sort((a, b) => b.month.localeCompare(a.month));
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
     return (
       <div>
@@ -3638,7 +3658,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
           </div>
 
           <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-            {[["ID Card No.", s.id_card_number], ["Phone", s.phone], ["Address", s.address], ["Emergency Contact", s.emergency_contact], ["Emergency Phone", s.emergency_phone], ["Joining Date", s.joining_date], ["Monthly Salary", s.salary ? `Rs. ${fmt(s.salary)}` : null], ["Total Deductions", totalDeductions > 0 ? `Rs. ${fmt(totalDeductions)}` : null], ["Note", s.note]].filter(([, v]) => v).map(([label, val]) => (
+            {[["ID Card No.", s.id_card_number], ["Phone", s.phone], ["Address", s.address], ["Emergency Contact", s.emergency_contact], ["Emergency Phone", s.emergency_phone], ["Joining Date", s.joining_date], ["Monthly Salary", s.salary ? `Rs. ${fmt(s.salary)}` : null], ["Total Deductions", totalDeductions > 0 ? `Rs. ${fmt(totalDeductions)}` : null], ["Total Paid", totalPaid > 0 ? `Rs. ${fmt(totalPaid)}` : null], ["Note", s.note]].filter(([, v]) => v).map(([label, val]) => (
               <div key={label} style={{ display: "flex", gap: 8, fontSize: 13 }}>
                 <span style={{ color: "#8a93a8", fontWeight: 600, minWidth: 130, flexShrink: 0 }}>{label}</span>
                 <span style={{ color: "#1e3a5f", fontWeight: 500 }}>{val}</span>
@@ -3723,6 +3743,45 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave }) {
                       : null}
                 </div>
                 <button onClick={() => removeLeave(l.id)} style={delBtn}><Trash2 size={14} /></button>
+              </div>
+            ))
+          }
+        </div>
+
+        {/* Salary payments */}
+        <div style={{ ...card, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Salary Payments</div>
+              {totalPaid > 0 && <div style={{ fontSize: 12, color: "#8a93a8" }}>Total paid: Rs. {fmt(totalPaid)}</div>}
+            </div>
+            <button onClick={() => { setPayForm({ ...blankPay(), amount: s.salary ? String(s.salary) : "" }); setShowPayForm(!showPayForm); }} style={{ ...primaryBtn, padding: "6px 12px", fontSize: 13 }}><Plus size={14} /> Record</button>
+          </div>
+
+          {showPayForm && (
+            <div style={{ background: "#f8fafd", borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid #eef1f7" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}><Field label="Month"><input type="month" value={payForm.month} onChange={(e) => setPayForm({ ...payForm, month: e.target.value })} style={inputStyle} /></Field></div>
+                <div style={{ flex: 1 }}><Field label="Paid date"><input type="date" value={payForm.paid_date} onChange={(e) => setPayForm({ ...payForm, paid_date: e.target.value })} style={inputStyle} /></Field></div>
+              </div>
+              <Field label="Amount (Rs.)"><input type="number" inputMode="decimal" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder={s.salary ? String(s.salary) : "0"} style={inputStyle} /></Field>
+              <Field label="Note (optional)"><input value={payForm.note} onChange={(e) => setPayForm({ ...payForm, note: e.target.value })} placeholder="e.g. Includes advance deduction" style={inputStyle} /></Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => addPayment(s.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: saving ? 0.6 : 1 }}>Save</button>
+                <button onClick={() => setShowPayForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {payments.length === 0
+            ? <div style={{ color: "#8a93a8", fontSize: 13 }}>No salary payments recorded.</div>
+            : payments.map((p) => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a5f" }}>{p.month} <span style={{ color: "#27ae60" }}>Rs. {fmt(p.amount)}</span></div>
+                  <div style={{ fontSize: 12, color: "#8a93a8" }}>Paid: {p.paid_date}{p.note ? ` · ${p.note}` : ""}</div>
+                </div>
+                <button onClick={() => removePayment(p.id)} style={delBtn}><Trash2 size={14} /></button>
               </div>
             ))
           }
