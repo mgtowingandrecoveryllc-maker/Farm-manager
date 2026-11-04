@@ -131,21 +131,21 @@ function Login() {
   const inputSt = { width: "100%", padding: "12px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--sage-200)", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "var(--white)", color: "var(--text-900)", outline: "none", fontFamily: "inherit" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--green-900)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "var(--ivory)", borderRadius: "var(--radius-xl)", padding: 32, width: "100%", maxWidth: 360, boxShadow: "var(--shadow-lg)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--primary-900)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "var(--white)", borderRadius: "var(--radius-lg)", padding: 32, width: "100%", maxWidth: 360, boxShadow: "var(--shadow-lg)" }}>
         <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <img src="/logo.jpeg" alt="Farm logo" style={{ width: 100, height: 100, objectFit: "cover", borderRadius: "50%", border: "3px solid var(--gold-500)" }} />
+          <img src="/logo.jpeg" alt="Farm logo" style={{ width: 100, height: 100, objectFit: "cover", borderRadius: "50%", border: "3px solid var(--primary)" }} />
         </div>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "var(--green-900)" }}>Farm Manager</h1>
+        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "var(--primary-900)" }}>Farm Manager</h1>
 
         {mode === "done" ? (
           <>
-            <div style={{ textAlign: "center", margin: "20px 0 16px", padding: 16, background: "#eafaf1", borderRadius: 10, border: "1px solid #a9dfbf" }}>
-              <CheckCircle size={32} color="#27ae60" style={{ marginBottom: 8 }} />
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#1e8449" }}>Request submitted!</div>
-              <div style={{ fontSize: 13, color: "#5a6478", marginTop: 6 }}>Your account request has been sent to the admin for approval. You will be able to sign in once approved.</div>
+            <div style={{ textAlign: "center", margin: "20px 0 16px", padding: 16, background: "var(--success-100)", borderRadius: "var(--radius-md)", border: "1px solid var(--primary-300)" }}>
+              <CheckCircle size={32} color="var(--success-700)" style={{ marginBottom: 8 }} />
+              <div style={{ fontWeight: 700, fontSize: 15, color: "var(--success-700)" }}>Request submitted!</div>
+              <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 6 }}>Your account request has been sent to the admin for approval. You will be able to sign in once approved.</div>
             </div>
-            <button onClick={() => { setMode("login"); setEmail(""); setPassword(""); setName(""); setErr(""); }} style={{ width: "100%", background: "#1e3a5f", color: "white", border: "none", borderRadius: 10, padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            <button onClick={() => { setMode("login"); setEmail(""); setPassword(""); setName(""); setErr(""); }} style={{ width: "100%", background: "var(--primary-900)", color: "white", border: "none", borderRadius: "var(--radius-md)", padding: "13px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
               Back to sign in
             </button>
           </>
@@ -318,12 +318,12 @@ function FarmApp({ session, onSignOut }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--sage-50)", color: "var(--text-900)", paddingBottom: "calc(68px + env(safe-area-inset-bottom))" }}>
-      <header style={{ background: "var(--green-900)", color: "white", padding: "0 16px 0", paddingTop: "max(env(safe-area-inset-top), 0px)", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid var(--gold-500)", boxShadow: "var(--shadow-lg)", height: "calc(56px + env(safe-area-inset-top))" }}>
+      <header style={{ background: "var(--primary-900)", color: "white", padding: "0 16px 0", paddingTop: "max(env(safe-area-inset-top), 0px)", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid var(--primary)", boxShadow: "var(--shadow-lg)", height: "calc(56px + env(safe-area-inset-top))" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img src="/logo.jpeg" alt="logo" style={{ height: 36, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
           <div>
             <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: -0.3, color: "white" }}>Farm Manager</h1>
-            {profile && <div style={{ fontSize: 10, color: "var(--gold-300)", fontWeight: 700, marginTop: 1, textTransform: "uppercase", letterSpacing: 1 }}>{profile.role}</div>}
+            {profile && <div style={{ fontSize: 10, color: "var(--primary-300)", fontWeight: 700, marginTop: 1, textTransform: "uppercase", letterSpacing: 1 }}>{profile.role}</div>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 0 }}>
@@ -359,9 +359,9 @@ function FarmApp({ session, onSignOut }) {
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               flex: "0 0 auto", width: `${Math.floor(100 / Math.min(tabs.length, 6))}vw`, minWidth: 56, border: "none",
               background: "none", padding: "10px 2px 7px",
-              color: active ? "var(--green-700)" : "var(--text-300)", display: "flex", flexDirection: "column",
+              color: active ? "var(--primary)" : "var(--gray-500)", display: "flex", flexDirection: "column",
               alignItems: "center", gap: 3, cursor: "pointer", fontSize: 9, fontWeight: active ? 800 : 500,
-              borderTop: active ? "2px solid var(--green-500)" : "2px solid transparent", marginTop: -1,
+              borderTop: active ? "2px solid var(--primary)" : "2px solid transparent", marginTop: -1,
               WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
             }}>
               <div style={{ position: "relative" }}>
@@ -380,10 +380,10 @@ function FarmApp({ session, onSignOut }) {
 }
 
 // ---------- reusable UI ----------
-const card = { background: "var(--ivory)", borderRadius: "var(--radius-lg)", padding: "16px 18px", boxShadow: "var(--shadow-md)", marginBottom: 14, border: "1px solid var(--sage-100)" };
-const inputStyle = { width: "100%", padding: "13px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--sage-200)", fontSize: 16, boxSizing: "border-box", background: "var(--white)", WebkitAppearance: "none", appearance: "none", color: "var(--text-900)", outline: "none" };
-const labelStyle = { fontSize: 12, fontWeight: 700, color: "var(--text-500)", marginBottom: 6, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" };
-const primaryBtn = { background: "var(--green-700)", color: "white", border: "none", borderRadius: "var(--radius-md)", padding: "13px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, WebkitTapHighlightColor: "transparent", touchAction: "manipulation", letterSpacing: "0.1px" };
+const card = { background: "var(--white)", borderRadius: "var(--radius-lg)", padding: "16px 18px", boxShadow: "var(--shadow-md)", marginBottom: 14, border: "1px solid var(--gray-300)" };
+const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--gray-300)", fontSize: 15, boxSizing: "border-box", background: "var(--white)", WebkitAppearance: "none", appearance: "none", color: "var(--gray-800)", outline: "none", fontFamily: "inherit" };
+const labelStyle = { fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 6, display: "block" };
+const primaryBtn = { background: "var(--primary)", color: "white", border: "none", borderRadius: "var(--radius-md)", padding: "12px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, WebkitTapHighlightColor: "transparent", touchAction: "manipulation" };
 
 function Field({ label, children }) {
   return <div style={{ marginBottom: 12 }}><label style={labelStyle}>{label}</label>{children}</div>;
