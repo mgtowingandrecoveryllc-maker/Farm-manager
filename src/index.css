@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html {
@@ -5,27 +7,73 @@ html {
   scroll-behavior: smooth;
 }
 
+:root {
+  --green-900: #1a3a2a;
+  --green-800: #22472f;
+  --green-700: #2d5a40;
+  --green-500: #4a8c5c;
+  --green-100: #e8f2eb;
+  --sage-200:  #c8d9c0;
+  --sage-100:  #e2ece0;
+  --sage-50:   #f4f7f2;
+  --ivory:     #faf9f5;
+  --gold-500:  #c9a84c;
+  --gold-300:  #e8d08a;
+  --gold-100:  #f7f0d8;
+  --red:       #c0392b;
+  --red-light: #fdf0ef;
+  --text-900:  #1a2420;
+  --text-700:  #344339;
+  --text-500:  #5a6e60;
+  --text-300:  #9aab9e;
+  --white:     #ffffff;
+
+  --shadow-sm: 0 1px 3px rgba(26,58,42,0.06);
+  --shadow-md: 0 4px 12px rgba(26,58,42,0.09);
+  --shadow-lg: 0 8px 24px rgba(26,58,42,0.12);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+}
+
 body {
   margin: 0;
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  background: var(--sage-50);
+  color: var(--text-900);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
 }
 
-/* Prevent iOS input zoom (inputs must be >= 16px font-size) */
 input, select, textarea {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
   font-size: 16px;
 }
 
-/* Remove tap highlight on all interactive elements */
+button {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+}
+
 button, a, [role="button"] {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
-/* Smooth scrolling containers */
+@keyframes deliveryBlink {
+  0%, 100% { background: var(--gold-100); border-color: var(--gold-300); }
+  50%       { background: var(--gold-300); border-color: var(--gold-500); }
+}
+.delivery-blink {
+  animation: deliveryBlink 1.4s ease-in-out infinite;
+}
+
 .scroll-x {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .scroll-x::-webkit-scrollbar { display: none; }
+
+nav::-webkit-scrollbar { display: none; }

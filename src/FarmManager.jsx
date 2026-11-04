@@ -128,15 +128,15 @@ function Login() {
     setMode("done");
   };
 
-  const inputSt = { width: "100%", padding: "11px 12px", borderRadius: 10, border: "1px solid #cdd6e6", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "#fbfcfe" };
+  const inputSt = { width: "100%", padding: "12px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--sage-200)", fontSize: 15, boxSizing: "border-box", marginBottom: 14, background: "var(--white)", color: "var(--text-900)", outline: "none", fontFamily: "inherit" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "white", borderRadius: 16, padding: 28, width: "100%", maxWidth: 360, boxShadow: "0 2px 10px rgba(0,0,0,0.08)" }}>
-        <div style={{ textAlign: "center", marginBottom: 14 }}>
-          <img src="/logo.jpeg" alt="Farm logo" style={{ width: 160, maxWidth: "70%", height: "auto", borderRadius: 12 }} />
+    <div style={{ minHeight: "100vh", background: "var(--green-900)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "var(--ivory)", borderRadius: "var(--radius-xl)", padding: 32, width: "100%", maxWidth: 360, boxShadow: "var(--shadow-lg)" }}>
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <img src="/logo.jpeg" alt="Farm logo" style={{ width: 100, height: 100, objectFit: "cover", borderRadius: "50%", border: "3px solid var(--gold-500)" }} />
         </div>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "#1e3a5f" }}>Farm Manager</h1>
+        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, textAlign: "center", color: "var(--green-900)" }}>Farm Manager</h1>
 
         {mode === "done" ? (
           <>
@@ -317,23 +317,23 @@ function FarmApp({ session, onSignOut }) {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f4f6fa", fontFamily: "system-ui, -apple-system, sans-serif", color: "#1f2d24", paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}>
-      <header style={{ background: "#1e3a5f", color: "white", padding: "env(safe-area-inset-top, 0px) 16px 12px", paddingTop: "max(env(safe-area-inset-top), 12px)", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "3px solid #e8b923" }}>
+    <div style={{ minHeight: "100vh", background: "var(--sage-50)", color: "var(--text-900)", paddingBottom: "calc(68px + env(safe-area-inset-bottom))" }}>
+      <header style={{ background: "var(--green-900)", color: "white", padding: "0 16px 0", paddingTop: "max(env(safe-area-inset-top), 0px)", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid var(--gold-500)", boxShadow: "var(--shadow-lg)", height: "calc(56px + env(safe-area-inset-top))" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/logo.jpeg" alt="logo" style={{ height: 40, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
+          <img src="/logo.jpeg" alt="logo" style={{ height: 36, width: "auto", borderRadius: 8, background: "white", padding: 2 }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: -0.3 }}>Farm Manager</h1>
-            {profile && <div style={{ fontSize: 11, color: "#e8b923", fontWeight: 600, marginTop: 1, textTransform: "uppercase", letterSpacing: 0.5 }}>{profile.role}</div>}
+            <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: -0.3, color: "white" }}>Farm Manager</h1>
+            {profile && <div style={{ fontSize: 10, color: "var(--gold-300)", fontWeight: 700, marginTop: 1, textTransform: "uppercase", letterSpacing: 1 }}>{profile.role}</div>}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => setTab("settings")} title="Settings" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: "10px", WebkitTapHighlightColor: "transparent" }}><SettingsIcon size={21} /></button>
-          <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: "10px", WebkitTapHighlightColor: "transparent" }}><RefreshCw size={21} /></button>
-          <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "white", cursor: "pointer", padding: "10px", WebkitTapHighlightColor: "transparent" }}><LogOut size={21} /></button>
+        <div style={{ display: "flex", gap: 0 }}>
+          <button onClick={() => setTab("settings")} title="Settings" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.75)", cursor: "pointer", padding: "10px 8px", WebkitTapHighlightColor: "transparent" }}><SettingsIcon size={20} /></button>
+          <button onClick={reload} title="Refresh" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.75)", cursor: "pointer", padding: "10px 8px", WebkitTapHighlightColor: "transparent" }}><RefreshCw size={20} /></button>
+          <button onClick={onSignOut} title="Sign out" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.75)", cursor: "pointer", padding: "10px 8px", WebkitTapHighlightColor: "transparent" }}><LogOut size={20} /></button>
         </div>
       </header>
 
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: "14px 14px" }}>
+      <main style={{ maxWidth: 720, margin: "0 auto", padding: "16px 14px" }}>
         {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab }} />}
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses, advances, setAdvances }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
@@ -351,23 +351,23 @@ function FarmApp({ session, onSignOut }) {
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
 
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #d4dcec", display: "flex", overflowX: "auto", overflowY: "hidden", zIndex: 10, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -2px 12px rgba(0,0,0,0.07)", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
-        <style>{`nav::-webkit-scrollbar { display: none; }`}</style>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--white)", borderTop: "1px solid var(--sage-100)", display: "flex", overflowX: "auto", overflowY: "hidden", zIndex: 10, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -4px 20px rgba(26,58,42,0.10)", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
         {tabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              flex: "0 0 auto", width: `${Math.floor(100 / Math.min(tabs.length, 6))}vw`, minWidth: 56, border: "none", background: "none", padding: "10px 2px 8px",
-              color: active ? "#1e3a5f" : "#9aa3b0", display: "flex", flexDirection: "column",
-              alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, fontWeight: active ? 700 : 500,
-              borderTop: active ? "3px solid #e8b923" : "3px solid transparent", marginTop: -1,
+              flex: "0 0 auto", width: `${Math.floor(100 / Math.min(tabs.length, 6))}vw`, minWidth: 56, border: "none",
+              background: "none", padding: "10px 2px 7px",
+              color: active ? "var(--green-700)" : "var(--text-300)", display: "flex", flexDirection: "column",
+              alignItems: "center", gap: 3, cursor: "pointer", fontSize: 9, fontWeight: active ? 800 : 500,
+              borderTop: active ? "2px solid var(--green-500)" : "2px solid transparent", marginTop: -1,
               WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
             }}>
               <div style={{ position: "relative" }}>
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
                 {t.badge > 0 && (
-                  <span style={{ position: "absolute", top: -5, right: -8, background: "#c0392b", color: "white", borderRadius: "50%", width: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
+                  <span style={{ position: "absolute", top: -5, right: -8, background: "var(--red)", color: "white", borderRadius: "50%", width: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{t.badge}</span>
                 )}
               </div>
               {t.label}
@@ -380,10 +380,10 @@ function FarmApp({ session, onSignOut }) {
 }
 
 // ---------- reusable UI ----------
-const card = { background: "white", borderRadius: 16, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: 14 };
-const inputStyle = { width: "100%", padding: "13px 14px", borderRadius: 12, border: "1px solid #cdd6e6", fontSize: 16, boxSizing: "border-box", background: "#fbfcfe", WebkitAppearance: "none", appearance: "none" };
-const labelStyle = { fontSize: 13, fontWeight: 600, color: "#3a4a3f", marginBottom: 6, display: "block" };
-const primaryBtn = { background: "#1e3a5f", color: "white", border: "none", borderRadius: 12, padding: "13px 18px", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, WebkitTapHighlightColor: "transparent", touchAction: "manipulation" };
+const card = { background: "var(--ivory)", borderRadius: "var(--radius-lg)", padding: "16px 18px", boxShadow: "var(--shadow-md)", marginBottom: 14, border: "1px solid var(--sage-100)" };
+const inputStyle = { width: "100%", padding: "13px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--sage-200)", fontSize: 16, boxSizing: "border-box", background: "var(--white)", WebkitAppearance: "none", appearance: "none", color: "var(--text-900)", outline: "none" };
+const labelStyle = { fontSize: 12, fontWeight: 700, color: "var(--text-500)", marginBottom: 6, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" };
+const primaryBtn = { background: "var(--green-700)", color: "white", border: "none", borderRadius: "var(--radius-md)", padding: "13px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, WebkitTapHighlightColor: "transparent", touchAction: "manipulation", letterSpacing: "0.1px" };
 
 function Field({ label, children }) {
   return <div style={{ marginBottom: 12 }}><label style={labelStyle}>{label}</label>{children}</div>;
@@ -481,12 +481,12 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
 
   const StatCard = ({ label, value, sub, color, pct }) => (
     <div style={{ ...card, marginBottom: 0, flex: 1, minWidth: 140 }}>
-      <div style={{ fontSize: 11, color: "#7a8c7f", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 11, color: "var(--text-500)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-        {sub && <div style={{ fontSize: 11, color: "#9aa89e" }}>{sub}</div>}
+        {sub && <div style={{ fontSize: 11, color: "var(--text-300)" }}>{sub}</div>}
         {pct !== null && pct !== undefined && (
-          <div style={{ fontSize: 11, fontWeight: 700, color: pct <= 0 ? "#27ae60" : "#c0392b" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: pct <= 0 ? "var(--green-500)" : "var(--red)" }}>
             {pct > 0 ? "▲" : "▼"} {Math.abs(pct)}%
           </div>
         )}
@@ -520,15 +520,15 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 14px", fontSize: 19, fontWeight: 700 }}>Overview</h2>
+      <h2 style={{ margin: "0 0 14px", fontSize: 19, fontWeight: 800, color: "var(--text-900)" }}>Overview</h2>
 
       {/* Delivery window blinking alerts */}
       {deliveryAlerts.map((a) => (
-        <div key={a.id} className="delivery-blink" style={{ border: "2px solid #f0c040", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+        <div key={a.id} className="delivery-blink" style={{ borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 22 }}>🐄</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#7a5800" }}>Delivery window — {a.tag}</div>
-            <div style={{ fontSize: 13, color: "#9a6700" }}>Due {new Date(a.due_date).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · {daysUntil(a.due_date) === 0 ? "Today!" : `${daysUntil(a.due_date)} day${daysUntil(a.due_date) !== 1 ? "s" : ""} away`}</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--gold-500)" }}>Delivery window — {a.tag}</div>
+            <div style={{ fontSize: 13, color: "var(--text-700)" }}>Due {new Date(a.due_date).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · {daysUntil(a.due_date) === 0 ? "Today!" : `${daysUntil(a.due_date)} day${daysUntil(a.due_date) !== 1 ? "s" : ""} away`}</div>
           </div>
         </div>
       ))}
@@ -540,8 +540,8 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
         </div>
         {(notices || []).length === 0 && <div style={{ fontSize: 13, color: "#9aa89e", marginBottom: 10 }}>No pinned notices yet.</div>}
         {(notices || []).map((n) => (
-          <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, background: "#f8f9fc", borderRadius: 10, padding: "9px 12px" }}>
-            <div style={{ flex: 1, fontSize: 13, color: "#2d3a4a", lineHeight: 1.5 }}>{n.title || n.body}</div>
+          <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, background: "var(--sage-50)", borderRadius: "var(--radius-sm)", padding: "9px 12px" }}>
+            <div style={{ flex: 1, fontSize: 13, color: "var(--text-700)", lineHeight: 1.5 }}>{n.title || n.body}</div>
             <button onClick={() => removeNotice(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c0392b", fontSize: 16, padding: "0 2px", lineHeight: 1 }}>×</button>
           </div>
         ))}
@@ -553,20 +553,20 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
 
       {/* Stat cards */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <StatCard label="This month expenses" value={fmt(monthExpense)} sub="vs last month" color="#c0392b" pct={expensePct} />
-        <StatCard label="Milk today" value={todayMilk.toFixed(1) + " L"} sub="vs yesterday" color="#1e3a5f" pct={milkPct} />
-        <StatCard label="Bills to pay" value={fmt(approvedTotal)} sub={`${billsApproved.length} approved`} color="#1c5fa8" />
-        <StatCard label="Pending review" value={billsSubmitted.length} sub={`${billsPaid.length} paid this month`} color="#c79a2e" />
+        <StatCard label="This month expenses" value={fmt(monthExpense)} sub="vs last month" color="var(--red)" pct={expensePct} />
+        <StatCard label="Milk today" value={todayMilk.toFixed(1) + " L"} sub="vs yesterday" color="var(--green-700)" pct={milkPct} />
+        <StatCard label="Bills to pay" value={fmt(approvedTotal)} sub={`${billsApproved.length} approved`} color="var(--green-900)" />
+        <StatCard label="Pending review" value={billsSubmitted.length} sub={`${billsPaid.length} paid this month`} color="var(--gold-500)" />
       </div>
 
       {/* Alerts */}
       {(lowStock.length > 0 || expExpiring.length > 0) && (
-        <div style={{ ...card, background: "#fff7e6", border: "1px solid #ffe0a3", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#9a6700", marginBottom: 8 }}>
+        <div style={{ ...card, background: "var(--gold-100)", border: "1px solid var(--gold-300)", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "var(--gold-500)", marginBottom: 8 }}>
             <AlertTriangle size={18} /> Attention needed
           </div>
-          {lowStock.map((m) => <div key={"l" + m.id} style={{ fontSize: 13, color: "#7a5800" }}>• {m.name} is low ({m.quantity} {m.unit} left)</div>)}
-          {expExpiring.map((m) => <div key={"e" + m.id} style={{ fontSize: 13, color: "#7a5800" }}>• {m.name} expires in {daysUntil(m.expiry)} days</div>)}
+          {lowStock.map((m) => <div key={"l" + m.id} style={{ fontSize: 13, color: "var(--text-700)" }}>• {m.name} is low ({m.quantity} {m.unit} left)</div>)}
+          {expExpiring.map((m) => <div key={"e" + m.id} style={{ fontSize: 13, color: "var(--text-700)" }}>• {m.name} expires in {daysUntil(m.expiry)} days</div>)}
         </div>
       )}
 
@@ -577,18 +577,18 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[
-            { label: "Submitted", count: billsSubmitted.length, color: "#c79a2e", bg: "#fff8e6" },
-            { label: "Approved", count: billsApproved.length, color: "#1c5fa8", bg: "#eef3fb" },
-            { label: "Paid", count: billsPaid.length, color: "#27ae60", bg: "#eafaf1" },
+            { label: "Submitted", count: billsSubmitted.length, color: "var(--gold-500)", bg: "var(--gold-100)" },
+            { label: "Approved", count: billsApproved.length, color: "var(--green-700)", bg: "var(--green-100)" },
+            { label: "Paid", count: billsPaid.length, color: "var(--green-500)", bg: "var(--sage-100)" },
           ].map(({ label, count, color, bg }) => (
-            <div key={label} onClick={() => setTab("bills")} style={{ flex: 1, minWidth: 80, background: bg, border: `1px solid ${color}30`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", textAlign: "center" }}>
+            <div key={label} onClick={() => setTab("bills")} style={{ flex: 1, minWidth: 80, background: bg, border: "1px solid var(--sage-200)", borderRadius: "var(--radius-sm)", padding: "10px 12px", cursor: "pointer", textAlign: "center" }}>
               <div style={{ fontSize: 22, fontWeight: 800, color }}>{count}</div>
-              <div style={{ fontSize: 11, color, fontWeight: 600, marginTop: 2 }}>{label}</div>
+              <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 2 }}>{label}</div>
             </div>
           ))}
         </div>
         {approvedTotal > 0 && (
-          <div style={{ marginTop: 10, padding: "8px 12px", background: "#eef3fb", borderRadius: 8, fontSize: 13, color: "#1c5fa8", fontWeight: 600 }}>
+          <div style={{ marginTop: 10, padding: "8px 12px", background: "var(--green-100)", borderRadius: "var(--radius-sm)", fontSize: 13, color: "var(--green-700)", fontWeight: 700 }}>
             Outstanding to pay: {fmt(approvedTotal)}
           </div>
         )}
@@ -607,19 +607,19 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
             const label = new Date(ym + "-01").toLocaleDateString(undefined, { month: "short" });
             return (
               <div key={ym} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                <div style={{ fontSize: 10, color: "#8a93a8", fontWeight: 600 }}>{total > 0 ? fmt(total).replace("PKR ", "").replace(",", "") : ""}</div>
+                <div style={{ fontSize: 10, color: "var(--text-300)", fontWeight: 600 }}>{total > 0 ? fmt(total).replace("PKR ", "").replace(",", "") : ""}</div>
                 <div style={{ width: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", height: 88, gap: 0 }}>
-                  <div style={{ width: "100%", height: conH, background: "#1c5fa8", borderRadius: conH > 0 && expH === 0 ? "4px 4px 4px 4px" : "4px 4px 0 0" }} />
-                  <div style={{ width: "100%", height: expH, background: "#c79a2e", borderRadius: conH > 0 ? "0 0 4px 4px" : "4px 4px 4px 4px" }} />
+                  <div style={{ width: "100%", height: conH, background: "var(--green-700)", borderRadius: conH > 0 && expH === 0 ? "4px 4px 4px 4px" : "4px 4px 0 0" }} />
+                  <div style={{ width: "100%", height: expH, background: "var(--gold-500)", borderRadius: conH > 0 ? "0 0 4px 4px" : "4px 4px 4px 4px" }} />
                 </div>
-                <div style={{ fontSize: 10, color: "#5a6478", fontWeight: 600 }}>{label}</div>
+                <div style={{ fontSize: 10, color: "var(--text-500)", fontWeight: 600 }}>{label}</div>
               </div>
             );
           })}
         </div>
         <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#5a6478" }}><div style={{ width: 10, height: 10, background: "#c79a2e", borderRadius: 2 }} /> Expenses</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#5a6478" }}><div style={{ width: 10, height: 10, background: "#1c5fa8", borderRadius: 2 }} /> Construction</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-500)" }}><div style={{ width: 10, height: 10, background: "var(--gold-500)", borderRadius: 2 }} /> Expenses</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-500)" }}><div style={{ width: 10, height: 10, background: "var(--green-700)", borderRadius: 2 }} /> Construction</div>
         </div>
       </div>
 
@@ -632,8 +632,8 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
                 <span style={{ fontWeight: 600 }}>{cat}</span><span>{fmt(amt)}</span>
               </div>
-              <div style={{ background: "#eef1f7", borderRadius: 6, height: 8 }}>
-                <div style={{ width: `${(amt / maxCat) * 100}%`, background: "#c79a2e", height: 8, borderRadius: 6 }} />
+              <div style={{ background: "var(--sage-100)", borderRadius: 6, height: 8 }}>
+                <div style={{ width: `${(amt / maxCat) * 100}%`, background: "var(--gold-500)", height: 8, borderRadius: 6 }} />
               </div>
             </div>
           ))}
@@ -671,8 +671,8 @@ function MonthFilter({ months, value, onChange }) {
     <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
       {["All", ...months].map((m) => (
         <button key={m} onClick={() => onChange(m)} style={{
-          whiteSpace: "nowrap", border: "1px solid #cdd6e6", borderRadius: 20, padding: "6px 12px", fontSize: 13,
-          background: value === m ? "#c79a2e" : "white", color: value === m ? "#1f2d24" : "#3a4a3f",
+          whiteSpace: "nowrap", border: "1px solid var(--sage-200)", borderRadius: 20, padding: "6px 12px", fontSize: 13,
+          background: value === m ? "var(--green-700)" : "var(--white)", color: value === m ? "var(--white)" : "var(--text-700)",
           fontWeight: value === m ? 700 : 500, cursor: "pointer",
         }}>{monthLabel(m)}</button>
       ))}
