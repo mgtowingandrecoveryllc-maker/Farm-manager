@@ -552,8 +552,16 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
   const downloadPpImage = async (path, title) => {
     const url = await getSignedUrl(path);
     if (!url) return;
-    const a = document.createElement("a");
-    a.href = url; a.download = `${title || "payment"}.jpg`; a.click();
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl; a.download = `${title || "payment"}.jpg`; a.click();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch {
+      window.open(url, "_blank");
+    }
   };
 
   const [noticeText, setNoticeText] = useState("");
@@ -656,7 +664,7 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
       {ppFullImg && (
         <div onClick={() => setPpFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <img src={ppFullImg} alt="Payment proof" style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius-md)", objectFit: "contain" }} />
-          <button onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = ppFullImg; a.download = "payment-proof.jpg"; a.click(); }}
+          <button onClick={async (e) => { e.stopPropagation(); try { const res = await fetch(ppFullImg); const blob = await res.blob(); const bu = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = bu; a.download = "payment-proof.jpg"; a.click(); setTimeout(() => URL.revokeObjectURL(bu), 10000); } catch { window.open(ppFullImg, "_blank"); } }}
             style={{ position: "absolute", top: 20, right: 60, background: "var(--primary)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
             <Download size={15} style={{ verticalAlign: "middle", marginRight: 4 }} />Download
           </button>
