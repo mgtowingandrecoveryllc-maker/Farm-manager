@@ -3667,7 +3667,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState("All");
 
-  const blankForm = () => ({ full_name: "", id_card_number: "", phone: "", address: "", emergency_contact: "", emergency_phone: "", joining_date: "", salary: "", role: "", status: "Active", note: "", photo_file: null, id_card_file: null, photo_path: null, id_card_path: null });
+  const blankForm = () => ({ full_name: "", id_card_number: "", phone: "", address: "", emergency_contact: "", emergency_phone: "", joining_date: "", salary: "", role: "", status: "Active", note: "", photo_file: null, id_card_file: null, photo_path: null, id_card_path: null, bank_name: "", account_title: "", account_number: "" });
   const [form, setForm] = useState(blankForm());
   const blankLeave = () => ({ from_date: todayStr(), to_date: todayStr(), reason: "", note: "", deduct_salary: false });
   const [leaveForm, setLeaveForm] = useState(blankLeave());
@@ -3700,7 +3700,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
   const openAdd = () => { setEditingId(null); setForm(blankForm()); setShowForm(true); };
   const openEdit = (s) => {
     setEditingId(s.id);
-    setForm({ full_name: s.full_name, id_card_number: s.id_card_number || "", phone: s.phone || "", address: s.address || "", emergency_contact: s.emergency_contact || "", emergency_phone: s.emergency_phone || "", joining_date: s.joining_date || "", salary: String(s.salary ?? ""), role: s.role || "", status: s.status || "Active", note: s.note || "", photo_file: null, id_card_file: null, photo_path: s.photo_path || null, id_card_path: s.id_card_path || null });
+    setForm({ full_name: s.full_name, id_card_number: s.id_card_number || "", phone: s.phone || "", address: s.address || "", emergency_contact: s.emergency_contact || "", emergency_phone: s.emergency_phone || "", joining_date: s.joining_date || "", salary: String(s.salary ?? ""), role: s.role || "", status: s.status || "Active", note: s.note || "", photo_file: null, id_card_file: null, photo_path: s.photo_path || null, id_card_path: s.id_card_path || null, bank_name: s.bank_name || "", account_title: s.account_title || "", account_number: s.account_number || "" });
     setShowForm(true);
   };
 
@@ -3711,7 +3711,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
     let id_card_path = form.id_card_path;
     if (form.photo_file) { const p = await uploadStaffFile(form.photo_file, "staff-photos"); if (p) photo_path = p; }
     if (form.id_card_file) { const p = await uploadStaffFile(form.id_card_file, "staff-id-cards"); if (p) id_card_path = p; }
-    const row = { full_name: form.full_name, id_card_number: form.id_card_number || null, phone: form.phone || null, address: form.address || null, emergency_contact: form.emergency_contact || null, emergency_phone: form.emergency_phone || null, joining_date: form.joining_date || null, salary: form.salary ? Number(form.salary) : null, role: form.role || null, status: form.status, note: form.note || null, photo_path, id_card_path };
+    const row = { full_name: form.full_name, id_card_number: form.id_card_number || null, phone: form.phone || null, address: form.address || null, emergency_contact: form.emergency_contact || null, emergency_phone: form.emergency_phone || null, joining_date: form.joining_date || null, salary: form.salary ? Number(form.salary) : null, role: form.role || null, status: form.status, note: form.note || null, photo_path, id_card_path, bank_name: form.bank_name || null, account_title: form.account_title || null, account_number: form.account_number || null };
     if (editingId) {
       if (await updateRow("staff", editingId, row)) { setStaff(staff.map((s) => s.id === editingId ? { ...s, ...row } : s)); if (selected?.id === editingId) setSelected({ ...selected, ...row }); }
     } else {
@@ -3772,6 +3772,12 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
       <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} style={inputStyle} /></Field>
       <Field label="Emergency contact name"><input value={form.emergency_contact} onChange={(e) => setForm({ ...form, emergency_contact: e.target.value })} style={inputStyle} /></Field>
       <Field label="Emergency contact phone"><input value={form.emergency_phone} onChange={(e) => setForm({ ...form, emergency_phone: e.target.value })} style={inputStyle} /></Field>
+      <div style={{ borderTop: "1px solid var(--gray-200)", margin: "10px 0 10px", paddingTop: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Bank Account Details</div>
+        <Field label="Bank name"><input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} placeholder="e.g. HBL, MCB, UBL, Meezan" style={inputStyle} /></Field>
+        <Field label="Account title"><input value={form.account_title} onChange={(e) => setForm({ ...form, account_title: e.target.value })} placeholder="Name on account" style={inputStyle} /></Field>
+        <Field label="Account number / IBAN"><input value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} placeholder="e.g. PK36SCBL0000001123456702" style={inputStyle} /></Field>
+      </div>
       <Field label="Employee photo">
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed #cdd6e6", borderRadius: 10, fontSize: 14, color: form.photo_file ? "#1e3a5f" : "#8a93a8", background: "#fbfcfe" }}>
           <Camera size={16} />{form.photo_file ? form.photo_file.name : (form.photo_path ? "Replace photo" : "Take / choose photo")}
@@ -3825,6 +3831,23 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
             ))}
           </div>
         </div>
+
+        {/* Bank account details */}
+        {(s.bank_name || s.account_title || s.account_number) && (
+          <div style={{ ...card, marginBottom: 12, background: "var(--primary-100)", border: "1px solid var(--primary-300)" }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--primary-700)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+              🏦 Bank Account Details
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {[["Bank", s.bank_name], ["Account Title", s.account_title], ["Account No. / IBAN", s.account_number]].filter(([, v]) => v).map(([label, val]) => (
+                <div key={label} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+                  <span style={{ color: "var(--primary-700)", fontWeight: 600, minWidth: 130, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color: "var(--gray-800)", fontWeight: 600, wordBreak: "break-all" }}>{val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ID Card photo */}
         {idCardUrl && (
