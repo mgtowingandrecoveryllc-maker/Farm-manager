@@ -222,10 +222,11 @@ function FarmApp({ session, onSignOut }) {
   const [staff, setStaff] = useState([]);
   const [staffLeave, setStaffLeave] = useState([]);
   const [staffPayments, setStaffPayments] = useState([]);
+  const [paymentProofs, setPaymentProofs] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl, sp] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl, sp, pp] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -235,12 +236,14 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("bill_items"), fetchTable("bill_item_names"),
       fetchTable("ration_log"), fetchTable("hospital_admissions"), fetchTable("hospital_treatments"),
       fetchTable("inventory"), fetchTable("staff"), fetchTable("staff_leave"), fetchTable("staff_salary_payments"),
+      fetchTable("payment_proofs"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
     setHospitalAdmissions(ha); setHospitalTreatments(ht);
     setInventory(inv); setStaff(sf); setStaffLeave(sl); setStaffPayments(sp);
+    setPaymentProofs(pp);
     setLoading(false);
   };
 
@@ -334,7 +337,7 @@ function FarmApp({ session, onSignOut }) {
       </header>
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "16px 14px" }}>
-        {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab }} />}
+        {tab === "dashboard" && <Dashboard {...{ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab, paymentProofs, setPaymentProofs }} />}
         {tab === "expenses" && <Expenses {...{ expenses, setExpenses, advances, setAdvances }} categories={categoryLists.expense} />}
         {tab === "medicines" && <Medicines {...{ medicines, setMedicines, animals }} />}
         {tab === "vaccinations" && <Vaccinations {...{ vaccinations, setVaccinations, animals }} />}
@@ -425,7 +428,7 @@ function Empty({ icon: Icon, text }) {
 }
 
 // ---------- dashboard ----------
-function Dashboard({ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab }) {
+function Dashboard({ expenses, construction, medicines, vaccinations, milk, bills, animals, notices, setNotices, setTab, paymentProofs, setPaymentProofs }) {
   const today = todayStr();
   const thisMonth = today.slice(0, 7);
 
@@ -500,6 +503,58 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
     const days = daysUntil(a.due_date);
     return days >= 0 && days <= 14;
   });
+
+  // --- Payment Proofs ---
+  const [showPayProofForm, setShowPayProofForm] = useState(false);
+  const [ppForm, setPpForm] = useState({ title: "", amount: "", paid_to: "", note: "" });
+  const [ppFile, setPpFile] = useState(null);
+  const [ppUploading, setPpUploading] = useState(false);
+  const [ppFullImg, setPpFullImg] = useState(null);
+
+  const addPaymentProof = async () => {
+    if (!ppForm.title.trim()) { alert("Enter a title/description."); return; }
+    setPpUploading(true);
+    let image_path = null;
+    if (ppFile) {
+      const blob = await compressImage(ppFile);
+      const path = `payment_proofs/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      const { error: upErr } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+      if (upErr) { alert("Image upload failed. Try again."); setPpUploading(false); return; }
+      image_path = path;
+    }
+    const saved = await insertRow("payment_proofs", {
+      title: ppForm.title.trim(),
+      amount: ppForm.amount ? Number(ppForm.amount) : null,
+      paid_to: ppForm.paid_to.trim() || null,
+      note: ppForm.note.trim() || null,
+      image_path,
+      paid_date: todayStr(),
+    });
+    if (saved) {
+      setPaymentProofs([saved, ...(paymentProofs || [])]);
+      setPpForm({ title: "", amount: "", paid_to: "", note: "" });
+      setPpFile(null);
+      setShowPayProofForm(false);
+    }
+    setPpUploading(false);
+  };
+
+  const removePaymentProof = async (id) => {
+    if (!window.confirm("Delete this payment record?")) return;
+    if (await deleteRow("payment_proofs", id)) setPaymentProofs((paymentProofs || []).filter((p) => p.id !== id));
+  };
+
+  const openPpImage = async (path) => {
+    const url = await getSignedUrl(path);
+    if (url) setPpFullImg(url);
+  };
+
+  const downloadPpImage = async (path, title) => {
+    const url = await getSignedUrl(path);
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = url; a.download = `${title || "payment"}.jpg`; a.click();
+  };
 
   const [noticeText, setNoticeText] = useState("");
   const [savingNotice, setSavingNotice] = useState(false);
@@ -639,6 +694,104 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
           ))}
       </div>
 
+      {/* Payment Proofs */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 7 }}>
+            <CheckCircle size={18} color="var(--primary)" /> Payments Done
+          </div>
+          <button onClick={() => setShowPayProofForm((v) => !v)} style={{ ...primaryBtn, padding: "7px 13px", fontSize: 13 }}>
+            <Plus size={15} /> Add
+          </button>
+        </div>
+
+        {showPayProofForm && (
+          <div style={{ background: "var(--gray-100)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>Description *</label>
+                <input style={inputStyle} placeholder="e.g. Electricity bill paid" value={ppForm.title} onChange={(e) => setPpForm((f) => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Amount (PKR)</label>
+                <input style={inputStyle} type="number" placeholder="0" value={ppForm.amount} onChange={(e) => setPpForm((f) => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Paid To</label>
+                <input style={inputStyle} placeholder="Vendor / person" value={ppForm.paid_to} onChange={(e) => setPpForm((f) => ({ ...f, paid_to: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>Note</label>
+                <input style={inputStyle} placeholder="Optional note" value={ppForm.note} onChange={(e) => setPpForm((f) => ({ ...f, note: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>Proof Photo</label>
+                <input type="file" accept="image/*" capture="environment" onChange={(e) => setPpFile(e.target.files[0])} style={{ fontSize: 14, color: "var(--gray-700)" }} />
+                {ppFile && <div style={{ fontSize: 12, color: "var(--primary)", marginTop: 4 }}>✓ {ppFile.name}</div>}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button onClick={addPaymentProof} disabled={ppUploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>
+                {ppUploading ? "Saving…" : "Save Payment"}
+              </button>
+              <button onClick={() => { setShowPayProofForm(false); setPpFile(null); }} style={{ background: "var(--gray-200)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-md)", padding: "12px 16px", fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(paymentProofs || []).length === 0 && !showPayProofForm && (
+          <div style={{ fontSize: 13, color: "var(--gray-500)", textAlign: "center", padding: "10px 0" }}>No payments recorded yet.</div>
+        )}
+
+        {(paymentProofs || []).map((p) => (
+          <div key={p.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderBottom: "1px solid var(--gray-200)" }}>
+            {/* Thumbnail */}
+            <div
+              onClick={() => p.image_path && openPpImage(p.image_path)}
+              style={{ width: 60, height: 60, borderRadius: "var(--radius-sm)", background: "var(--gray-200)", flexShrink: 0, overflow: "hidden", cursor: p.image_path ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              {p.image_path
+                ? <PaymentThumb path={p.image_path} />
+                : <FileText size={24} color="var(--gray-400)" />}
+            </div>
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--gray-800)", marginBottom: 2 }}>{p.title}</div>
+              {p.paid_to && <div style={{ fontSize: 12, color: "var(--gray-600)" }}>To: {p.paid_to}</div>}
+              {p.amount && <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)", marginTop: 2 }}>PKR {fmt(p.amount)}</div>}
+              {p.note && <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>{p.note}</div>}
+              <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 3 }}>{p.paid_date || p.created_at?.slice(0, 10)}</div>
+            </div>
+            {/* Actions */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+              {p.image_path && (
+                <>
+                  <button onClick={() => openPpImage(p.image_path)} style={{ background: "var(--primary-100)", color: "var(--primary-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View</button>
+                  <button onClick={() => downloadPpImage(p.image_path, p.title)} style={{ background: "var(--gray-100)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                    <Download size={12} />
+                  </button>
+                </>
+              )}
+              <button onClick={() => removePaymentProof(p.id)} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: "4px" }}><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Full-size image lightbox */}
+      {ppFullImg && (
+        <div onClick={() => setPpFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <img src={ppFullImg} alt="Payment proof" style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius-md)", objectFit: "contain" }} />
+          <button onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = ppFullImg; a.download = "payment-proof.jpg"; a.click(); }}
+            style={{ position: "absolute", top: 20, right: 60, background: "var(--primary)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+            <Download size={15} style={{ verticalAlign: "middle", marginRight: 4 }} />Download
+          </button>
+          <button onClick={() => setPpFullImg(null)} style={{ position: "absolute", top: 20, right: 16, background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>✕</button>
+        </div>
+      )}
+
       {/* Quick actions */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {[["expenses", "Add expense", Wallet], ["milk", "Log milk", Milk], ["vaccinations", "Record vaccine", Syringe]].map(([t, l, I]) => (
@@ -649,6 +802,13 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
       </div>
     </div>
   );
+}
+
+function PaymentThumb({ path }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => { getSignedUrl(path).then(setUrl); }, [path]);
+  if (!url) return <div style={{ width: "100%", height: "100%", background: "var(--gray-200)" }} />;
+  return <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
 }
 
 function daysUntil(d) {
