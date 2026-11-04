@@ -575,6 +575,95 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
 
   return (
     <div>
+      {/* ===== PAYMENTS DONE TODAY — first thing on dashboard ===== */}
+      <div style={{ ...card, marginBottom: 14, border: "2px solid var(--primary)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, display: "flex", alignItems: "center", gap: 7, color: "var(--primary-700)" }}>
+            <CheckCircle size={18} color="var(--primary)" /> Payments Done Today
+          </div>
+          <button onClick={() => setShowPayProofForm((v) => !v)} style={{ ...primaryBtn, padding: "7px 13px", fontSize: 13 }}>
+            <Plus size={15} /> Add
+          </button>
+        </div>
+
+        {showPayProofForm && (
+          <div style={{ background: "var(--gray-100)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>Description *</label>
+                <input style={inputStyle} placeholder="e.g. Electricity bill paid" value={ppForm.title} onChange={(e) => setPpForm((f) => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Amount (PKR)</label>
+                <input style={inputStyle} type="number" placeholder="0" value={ppForm.amount} onChange={(e) => setPpForm((f) => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Paid To</label>
+                <input style={inputStyle} placeholder="Vendor / person" value={ppForm.paid_to} onChange={(e) => setPpForm((f) => ({ ...f, paid_to: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>Note</label>
+                <input style={inputStyle} placeholder="Optional note" value={ppForm.note} onChange={(e) => setPpForm((f) => ({ ...f, note: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>Proof Photo</label>
+                <input type="file" accept="image/*" capture="environment" onChange={(e) => setPpFile(e.target.files[0])} style={{ fontSize: 14, color: "var(--gray-700)" }} />
+                {ppFile && <div style={{ fontSize: 12, color: "var(--primary)", marginTop: 4 }}>✓ {ppFile.name}</div>}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button onClick={addPaymentProof} disabled={ppUploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>
+                {ppUploading ? "Saving…" : "Save Payment"}
+              </button>
+              <button onClick={() => { setShowPayProofForm(false); setPpFile(null); }} style={{ background: "var(--gray-200)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-md)", padding: "12px 16px", fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(() => {
+          const todayProofs = (paymentProofs || []).filter((p) => (p.paid_date || p.created_at?.slice(0, 10)) === today);
+          if (todayProofs.length === 0 && !showPayProofForm) return (
+            <div style={{ fontSize: 13, color: "var(--gray-500)", textAlign: "center", padding: "10px 0" }}>No payments recorded today. Tap + Add to log one.</div>
+          );
+          return todayProofs.map((p) => (
+            <div key={p.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderBottom: "1px solid var(--gray-200)" }}>
+              <div onClick={() => p.image_path && openPpImage(p.image_path)} style={{ width: 60, height: 60, borderRadius: "var(--radius-sm)", background: "var(--gray-200)", flexShrink: 0, overflow: "hidden", cursor: p.image_path ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {p.image_path ? <PaymentThumb path={p.image_path} /> : <FileText size={24} color="var(--gray-400)" />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--gray-800)", marginBottom: 2 }}>{p.title}</div>
+                {p.paid_to && <div style={{ fontSize: 12, color: "var(--gray-600)" }}>To: {p.paid_to}</div>}
+                {p.amount && <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)", marginTop: 2 }}>PKR {fmt(p.amount)}</div>}
+                {p.note && <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>{p.note}</div>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                {p.image_path && (
+                  <>
+                    <button onClick={() => openPpImage(p.image_path)} style={{ background: "var(--primary-100)", color: "var(--primary-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View</button>
+                    <button onClick={() => downloadPpImage(p.image_path, p.title)} style={{ background: "var(--gray-100)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}><Download size={12} /></button>
+                  </>
+                )}
+                <button onClick={() => removePaymentProof(p.id)} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: "4px" }}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ));
+        })()}
+      </div>
+
+      {/* Full-size image lightbox */}
+      {ppFullImg && (
+        <div onClick={() => setPpFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <img src={ppFullImg} alt="Payment proof" style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius-md)", objectFit: "contain" }} />
+          <button onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = ppFullImg; a.download = "payment-proof.jpg"; a.click(); }}
+            style={{ position: "absolute", top: 20, right: 60, background: "var(--primary)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+            <Download size={15} style={{ verticalAlign: "middle", marginRight: 4 }} />Download
+          </button>
+          <button onClick={() => setPpFullImg(null)} style={{ position: "absolute", top: 20, right: 16, background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>✕</button>
+        </div>
+      )}
+
       <h2 style={{ margin: "0 0 14px", fontSize: 19, fontWeight: 800, color: "var(--text-900)" }}>Overview</h2>
 
       {/* Delivery window blinking alerts */}
@@ -693,104 +782,6 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
             </div>
           ))}
       </div>
-
-      {/* Payment Proofs */}
-      <div style={{ ...card, marginBottom: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 7 }}>
-            <CheckCircle size={18} color="var(--primary)" /> Payments Done
-          </div>
-          <button onClick={() => setShowPayProofForm((v) => !v)} style={{ ...primaryBtn, padding: "7px 13px", fontSize: 13 }}>
-            <Plus size={15} /> Add
-          </button>
-        </div>
-
-        {showPayProofForm && (
-          <div style={{ background: "var(--gray-100)", borderRadius: "var(--radius-md)", padding: 14, marginBottom: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={labelStyle}>Description *</label>
-                <input style={inputStyle} placeholder="e.g. Electricity bill paid" value={ppForm.title} onChange={(e) => setPpForm((f) => ({ ...f, title: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Amount (PKR)</label>
-                <input style={inputStyle} type="number" placeholder="0" value={ppForm.amount} onChange={(e) => setPpForm((f) => ({ ...f, amount: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Paid To</label>
-                <input style={inputStyle} placeholder="Vendor / person" value={ppForm.paid_to} onChange={(e) => setPpForm((f) => ({ ...f, paid_to: e.target.value }))} />
-              </div>
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={labelStyle}>Note</label>
-                <input style={inputStyle} placeholder="Optional note" value={ppForm.note} onChange={(e) => setPpForm((f) => ({ ...f, note: e.target.value }))} />
-              </div>
-              <div style={{ gridColumn: "1/-1" }}>
-                <label style={labelStyle}>Proof Photo</label>
-                <input type="file" accept="image/*" capture="environment" onChange={(e) => setPpFile(e.target.files[0])} style={{ fontSize: 14, color: "var(--gray-700)" }} />
-                {ppFile && <div style={{ fontSize: 12, color: "var(--primary)", marginTop: 4 }}>✓ {ppFile.name}</div>}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button onClick={addPaymentProof} disabled={ppUploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>
-                {ppUploading ? "Saving…" : "Save Payment"}
-              </button>
-              <button onClick={() => { setShowPayProofForm(false); setPpFile(null); }} style={{ background: "var(--gray-200)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-md)", padding: "12px 16px", fontWeight: 600, cursor: "pointer" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {(paymentProofs || []).length === 0 && !showPayProofForm && (
-          <div style={{ fontSize: 13, color: "var(--gray-500)", textAlign: "center", padding: "10px 0" }}>No payments recorded yet.</div>
-        )}
-
-        {(paymentProofs || []).map((p) => (
-          <div key={p.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderBottom: "1px solid var(--gray-200)" }}>
-            {/* Thumbnail */}
-            <div
-              onClick={() => p.image_path && openPpImage(p.image_path)}
-              style={{ width: 60, height: 60, borderRadius: "var(--radius-sm)", background: "var(--gray-200)", flexShrink: 0, overflow: "hidden", cursor: p.image_path ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              {p.image_path
-                ? <PaymentThumb path={p.image_path} />
-                : <FileText size={24} color="var(--gray-400)" />}
-            </div>
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--gray-800)", marginBottom: 2 }}>{p.title}</div>
-              {p.paid_to && <div style={{ fontSize: 12, color: "var(--gray-600)" }}>To: {p.paid_to}</div>}
-              {p.amount && <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)", marginTop: 2 }}>PKR {fmt(p.amount)}</div>}
-              {p.note && <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>{p.note}</div>}
-              <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 3 }}>{p.paid_date || p.created_at?.slice(0, 10)}</div>
-            </div>
-            {/* Actions */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-              {p.image_path && (
-                <>
-                  <button onClick={() => openPpImage(p.image_path)} style={{ background: "var(--primary-100)", color: "var(--primary-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View</button>
-                  <button onClick={() => downloadPpImage(p.image_path, p.title)} style={{ background: "var(--gray-100)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "5px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                    <Download size={12} />
-                  </button>
-                </>
-              )}
-              <button onClick={() => removePaymentProof(p.id)} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: "4px" }}><Trash2 size={14} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Full-size image lightbox */}
-      {ppFullImg && (
-        <div onClick={() => setPpFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <img src={ppFullImg} alt="Payment proof" style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius-md)", objectFit: "contain" }} />
-          <button onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = ppFullImg; a.download = "payment-proof.jpg"; a.click(); }}
-            style={{ position: "absolute", top: 20, right: 60, background: "var(--primary)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-            <Download size={15} style={{ verticalAlign: "middle", marginRight: 4 }} />Download
-          </button>
-          <button onClick={() => setPpFullImg(null)} style={{ position: "absolute", top: 20, right: 16, background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>✕</button>
-        </div>
-      )}
 
       {/* Quick actions */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
