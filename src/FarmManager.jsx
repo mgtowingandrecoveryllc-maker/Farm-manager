@@ -3675,14 +3675,39 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
   const [showPayForm, setShowPayForm] = useState(false);
   const blankPay = () => ({ month: todayStr().slice(0, 7), amount: "", paid_date: todayStr(), note: "" });
   const [payForm, setPayForm] = useState(blankPay());
+  const [payProofFile, setPayProofFile] = useState(null);
+  const [payProofUploading, setPayProofUploading] = useState(false);
+  const [payProofFullImg, setPayProofFullImg] = useState(null);
 
   const addPayment = async (staffId) => {
     if (!payForm.amount || !payForm.month) return;
+    setPayProofUploading(true);
     setSaving(true);
-    const row = { staff_id: staffId, month: payForm.month, amount: Number(payForm.amount), paid_date: payForm.paid_date || todayStr(), note: payForm.note || null };
+    let proof_path = null;
+    if (payProofFile) {
+      const blob = await compressImage(payProofFile);
+      const path = `salary-proofs/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      const { error } = await supabase.storage.from("receipts").upload(path, blob, { contentType: "image/jpeg" });
+      if (error) { alert("Image upload failed. Try again."); setSaving(false); setPayProofUploading(false); return; }
+      proof_path = path;
+    }
+    const row = { staff_id: staffId, month: payForm.month, amount: Number(payForm.amount), paid_date: payForm.paid_date || todayStr(), note: payForm.note || null, proof_path };
     const saved = await insertRow("staff_salary_payments", row);
-    if (saved) { setStaffPayments([saved, ...staffPayments]); setShowPayForm(false); setPayForm(blankPay()); }
+    if (saved) { setStaffPayments([saved, ...staffPayments]); setShowPayForm(false); setPayForm(blankPay()); setPayProofFile(null); }
     setSaving(false);
+    setPayProofUploading(false);
+  };
+
+  const downloadSalaryProof = async (path, label) => {
+    const url = await getSignedUrl(path);
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const bu = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = bu; a.download = `${label || "salary-proof"}.jpg`; a.click();
+      setTimeout(() => URL.revokeObjectURL(bu), 10000);
+    } catch { window.open(url, "_blank"); }
   };
 
   const removePayment = async (id) => {
@@ -3948,9 +3973,15 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
               </div>
               <Field label="Amount (Rs.)"><input type="number" inputMode="decimal" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder={s.salary ? String(s.salary) : "0"} style={inputStyle} /></Field>
               <Field label="Note (optional)"><input value={payForm.note} onChange={(e) => setPayForm({ ...payForm, note: e.target.value })} placeholder="e.g. Includes advance deduction" style={inputStyle} /></Field>
+              <Field label="Proof photo (optional)">
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed var(--gray-300)", borderRadius: "var(--radius-md)", fontSize: 14, color: payProofFile ? "var(--primary)" : "var(--gray-500)", background: "var(--gray-50)" }}>
+                  <Camera size={16} />{payProofFile ? payProofFile.name : "Take / choose receipt photo"}
+                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setPayProofFile(e.target.files[0] || null)} />
+                </label>
+              </Field>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => addPayment(s.id)} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: saving ? 0.6 : 1 }}>Save</button>
-                <button onClick={() => setShowPayForm(false)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
+                <button onClick={() => addPayment(s.id)} disabled={saving || payProofUploading} style={{ ...primaryBtn, flex: 1, justifyContent: "center", opacity: (saving || payProofUploading) ? 0.6 : 1 }}>{payProofUploading ? "Uploading…" : saving ? "Saving…" : "Save"}</button>
+                <button onClick={() => { setShowPayForm(false); setPayProofFile(null); }} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#8a93a8" }}>Cancel</button>
               </div>
             </div>
           )}
@@ -3958,18 +3989,41 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
           {payments.length === 0
             ? <div style={{ color: "#8a93a8", fontSize: 13 }}>No salary payments recorded.</div>
             : payments.map((p) => (
-              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid #eef1f7" }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a5f" }}>{p.month} <span style={{ color: "#27ae60" }}>Rs. {fmt(p.amount)}</span></div>
-                  <div style={{ fontSize: 12, color: "#8a93a8" }}>Paid: {p.paid_date}{p.note ? ` · ${p.note}` : ""}</div>
+              <div key={p.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid #eef1f7" }}>
+                {/* proof thumbnail */}
+                <div onClick={() => p.proof_path && getSignedUrl(p.proof_path).then(setPayProofFullImg)}
+                  style={{ width: 48, height: 48, borderRadius: "var(--radius-sm)", background: "var(--gray-200)", flexShrink: 0, overflow: "hidden", cursor: p.proof_path ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {p.proof_path ? <PaymentThumb path={p.proof_path} /> : <FileText size={18} color="var(--gray-400)" />}
                 </div>
-                <button onClick={() => removePayment(p.id)} style={delBtn}><Trash2 size={14} /></button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gray-800)" }}>{p.month} <span style={{ color: "var(--primary)" }}>Rs. {fmt(p.amount)}</span></div>
+                  <div style={{ fontSize: 12, color: "var(--gray-500)" }}>Paid: {p.paid_date}{p.note ? ` · ${p.note}` : ""}</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                  {p.proof_path && (
+                    <>
+                      <button onClick={() => getSignedUrl(p.proof_path).then(setPayProofFullImg)} style={{ background: "var(--primary-100)", color: "var(--primary-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View</button>
+                      <button onClick={() => downloadSalaryProof(p.proof_path, `salary-${p.month}`)} style={{ background: "var(--gray-100)", color: "var(--gray-700)", border: "none", borderRadius: "var(--radius-sm)", padding: "4px 8px", fontSize: 11, cursor: "pointer" }}><Download size={11} /></button>
+                    </>
+                  )}
+                  <button onClick={() => removePayment(p.id)} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: "2px" }}><Trash2 size={14} /></button>
+                </div>
               </div>
             ))
           }
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
+          {payProofFullImg && (
+            <div onClick={() => setPayProofFullImg(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <img src={payProofFullImg} alt="Salary proof" style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius-md)", objectFit: "contain" }} />
+              <button onClick={async (e) => { e.stopPropagation(); try { const res = await fetch(payProofFullImg); const blob = await res.blob(); const bu = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = bu; a.download = "salary-proof.jpg"; a.click(); setTimeout(() => URL.revokeObjectURL(bu), 10000); } catch { window.open(payProofFullImg, "_blank"); } }}
+                style={{ position: "absolute", top: 20, right: 60, background: "var(--primary)", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                <Download size={15} style={{ verticalAlign: "middle", marginRight: 4 }} />Download
+              </button>
+              <button onClick={() => setPayProofFullImg(null)} style={{ position: "absolute", top: 20, right: 16, background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>✕</button>
+            </div>
+          )}
           <button onClick={() => openEdit(s)} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>Edit profile</button>
           <button onClick={() => remove(s.id)} style={{ ...primaryBtn, flex: 1, justifyContent: "center", background: "#c0392b" }}><Trash2 size={16} /> Remove</button>
         </div>
