@@ -615,7 +615,7 @@ function Dashboard({ expenses, construction, medicines, vaccinations, milk, bill
               </div>
               <div style={{ gridColumn: "1/-1" }}>
                 <label style={labelStyle}>Proof Photo</label>
-                <input type="file" accept="image/*" capture="environment" onChange={(e) => setPpFile(e.target.files[0])} style={{ fontSize: 14, color: "var(--gray-700)" }} />
+                <input type="file" accept="image/*" onChange={(e) => setPpFile(e.target.files[0])} style={{ fontSize: 14, color: "var(--gray-700)" }} />
                 {ppFile && <div style={{ fontSize: 12, color: "var(--primary)", marginTop: 4 }}>✓ {ppFile.name}</div>}
               </div>
             </div>
@@ -3976,7 +3976,7 @@ function Staff({ staff, setStaff, staffLeave, setStaffLeave, staffPayments, setS
               <Field label="Proof photo (optional)">
                 <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px", border: "1px dashed var(--gray-300)", borderRadius: "var(--radius-md)", fontSize: 14, color: payProofFile ? "var(--primary)" : "var(--gray-500)", background: "var(--gray-50)" }}>
                   <Camera size={16} />{payProofFile ? payProofFile.name : "Take / choose receipt photo"}
-                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setPayProofFile(e.target.files[0] || null)} />
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setPayProofFile(e.target.files[0] || null)} />
                 </label>
               </Field>
               <div style={{ display: "flex", gap: 8 }}>
