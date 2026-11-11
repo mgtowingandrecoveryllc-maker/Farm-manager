@@ -223,10 +223,11 @@ function FarmApp({ session, onSignOut }) {
   const [staffLeave, setStaffLeave] = useState([]);
   const [staffPayments, setStaffPayments] = useState([]);
   const [paymentProofs, setPaymentProofs] = useState([]);
+  const [vendorLedger, setVendorLedger] = useState([]);
 
   const reload = async () => {
     setLoading(true);
-    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl, sp, pp] = await Promise.all([
+    const [e, m, v, mk, c, a, ct, vd, bl, adv, nt, wt, br, ins, bi, bin, rl, ha, ht, inv, sf, sl, sp, pp, vl] = await Promise.all([
       fetchTable("expenses"), fetchTable("medicines"),
       fetchTable("vaccinations"), fetchTable("milk"),
       fetchTable("construction"), fetchTable("animals"),
@@ -236,14 +237,14 @@ function FarmApp({ session, onSignOut }) {
       fetchTable("bill_items"), fetchTable("bill_item_names"),
       fetchTable("ration_log"), fetchTable("hospital_admissions"), fetchTable("hospital_treatments"),
       fetchTable("inventory"), fetchTable("staff"), fetchTable("staff_leave"), fetchTable("staff_salary_payments"),
-      fetchTable("payment_proofs"),
+      fetchTable("payment_proofs"), fetchTable("vendor_ledger"),
     ]);
     setExpenses(e); setMedicines(m); setVaccinations(v); setMilk(mk); setConstruction(c); setAnimals(a); setCats(ct); setVendors(vd); setBills(bl); setAdvances(adv); setNotices(nt);
     setWeights(wt); setBreedingRecs(br); setInspections(ins);
     setBillItems(bi); setBillItemNames(bin); setRationLog(rl);
     setHospitalAdmissions(ha); setHospitalTreatments(ht);
     setInventory(inv); setStaff(sf); setStaffLeave(sl); setStaffPayments(sp);
-    setPaymentProofs(pp);
+    setPaymentProofs(pp); setVendorLedger(vl);
     setLoading(false);
   };
 
@@ -315,6 +316,7 @@ function FarmApp({ session, onSignOut }) {
     { id: "hospital", label: "Hospital", icon: Stethoscope },
     { id: "inventory", label: "Inventory", icon: Hammer },
     { id: "staff", label: "Staff", icon: Users },
+    { id: "vendor_ledger", label: "Vendors", icon: Wallet },
     { id: "reports", label: "Reports", icon: TrendingUp },
     { id: "assistant", label: "Assistant", icon: MessageSquare },
   ];
@@ -349,7 +351,8 @@ function FarmApp({ session, onSignOut }) {
         {tab === "hospital" && <Hospital admissions={hospitalAdmissions} setAdmissions={setHospitalAdmissions} treatments={hospitalTreatments} setTreatments={setHospitalTreatments} animals={animals} medicines={medicines} />}
         {tab === "inventory" && <Inventory inventory={inventory} setInventory={setInventory} />}
         {tab === "staff" && <Staff staff={staff} setStaff={setStaff} staffLeave={staffLeave} setStaffLeave={setStaffLeave} staffPayments={staffPayments} setStaffPayments={setStaffPayments} />}
-        {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}  
+        {tab === "vendor_ledger" && <VendorLedger vendorLedger={vendorLedger} setVendorLedger={setVendorLedger} />}
+        {tab === "reports" && <Reports {...{ expenses, construction, milk, setTab }} />}
         {tab === "assistant" && <Assistant />}
         {tab === "settings" && <SettingsScreen {...{ cats, setCats, vendors, setVendors }} profile={profile} userEmail={session.user.email} />}
       </main>
@@ -4172,4 +4175,190 @@ function Reports({ expenses, construction, milk, setTab }) {
 }
 
 const delBtn = { border: "none", background: "#fbeaea", color: "#c0392b", borderRadius: 10, padding: 10, cursor: "pointer", flexShrink: 0, WebkitTapHighlightColor: "transparent", touchAction: "manipulation" };
+
+// ─── Vendor Ledger ────────────────────────────────────────────────────────────
+function VendorLedger({ vendorLedger, setVendorLedger }) {
+  const card = { background: "var(--white)", borderRadius: "var(--radius-lg)", padding: "16px 18px", boxShadow: "var(--shadow-md)", marginBottom: 14, border: "1px solid var(--gray-300)" };
+  const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: "var(--radius-md)", border: "1px solid var(--gray-300)", fontSize: 15, boxSizing: "border-box", background: "var(--white)", color: "var(--gray-800)", outline: "none", fontFamily: "inherit" };
+  const labelStyle = { fontSize: 13, fontWeight: 600, color: "var(--gray-700)", marginBottom: 6, display: "block" };
+  const primaryBtn = { background: "var(--primary)", color: "white", border: "none", borderRadius: "var(--radius-md)", padding: "12px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7 };
+
+  const blank = () => ({ vendor_name: "", type: "purchase", amount: "", date: todayStr(), note: "" });
+  const [form, setForm] = useState(blank());
+  const [saving, setSaving] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+
+  // Build summary per vendor
+  const summary = useMemo(() => {
+    const map = {};
+    (vendorLedger || []).forEach((row) => {
+      if (!map[row.vendor_name]) map[row.vendor_name] = { name: row.vendor_name, purchases: 0, payments: 0 };
+      if (row.type === "purchase") map[row.vendor_name].purchases += Number(row.amount || 0);
+      else map[row.vendor_name].payments += Number(row.amount || 0);
+    });
+    return Object.values(map).sort((a, b) => (b.purchases - b.payments) - (a.purchases - a.payments));
+  }, [vendorLedger]);
+
+  // Existing vendor names for autocomplete
+  const knownVendors = useMemo(() => [...new Set((vendorLedger || []).map((r) => r.vendor_name).filter(Boolean))].sort(), [vendorLedger]);
+
+  const save = async () => {
+    if (!form.vendor_name.trim() || !form.amount) return;
+    setSaving(true);
+    const row = { vendor_name: form.vendor_name.trim(), type: form.type, amount: Number(form.amount), date: form.date || todayStr(), note: form.note || null };
+    const saved = await insertRow("vendor_ledger", row);
+    if (saved) {
+      setVendorLedger([saved, ...vendorLedger]);
+      setForm(blank());
+      setShowForm(false);
+    }
+    setSaving(false);
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Delete this entry?")) return;
+    if (await deleteRow("vendor_ledger", id)) setVendorLedger(vendorLedger.filter((r) => r.id !== id));
+  };
+
+  const vendorRows = selectedVendor ? (vendorLedger || []).filter((r) => r.vendor_name === selectedVendor).sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+  const sel = summary.find((s) => s.name === selectedVendor);
+
+  if (selectedVendor) {
+    const balance = sel ? sel.purchases - sel.payments : 0;
+    return (
+      <div>
+        <button onClick={() => setSelectedVendor(null)} style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 14, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          ← All Vendors
+        </button>
+        <div style={{ ...card, border: balance > 0 ? "2px solid var(--danger)" : "2px solid var(--success)" }}>
+          <div style={{ fontWeight: 800, fontSize: 17, color: "var(--gray-800)", marginBottom: 4 }}>{selectedVendor}</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 100, background: "var(--danger-100)", borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--danger-700)", textTransform: "uppercase" }}>Purchased (Owe)</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--danger-700)" }}>Rs {fmt(sel?.purchases)}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 100, background: "var(--success-100)", borderRadius: "var(--radius-sm)", padding: "10px 14px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--success-700)", textTransform: "uppercase" }}>Paid</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--success-700)" }}>Rs {fmt(sel?.payments)}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 100, background: balance > 0 ? "var(--danger-100)" : "var(--success-100)", borderRadius: "var(--radius-sm)", padding: "10px 14px", border: `2px solid ${balance > 0 ? "var(--danger)" : "var(--success)"}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: balance > 0 ? "var(--danger-700)" : "var(--success-700)", textTransform: "uppercase" }}>Balance Owed</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: balance > 0 ? "var(--danger-700)" : "var(--success-700)" }}>Rs {fmt(Math.abs(balance))}</div>
+              {balance <= 0 && <div style={{ fontSize: 11, color: "var(--success-700)", fontWeight: 600 }}>Fully Paid ✓</div>}
+            </div>
+          </div>
+        </div>
+
+        <button onClick={() => { setForm({ ...blank(), vendor_name: selectedVendor }); setShowForm(true); }} style={{ ...primaryBtn, marginBottom: 14, width: "100%", justifyContent: "center" }}>
+          + Add Entry
+        </button>
+
+        {showForm && (
+          <div style={{ ...card, border: "2px solid var(--primary)" }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "var(--primary-700)", marginBottom: 12 }}>New Entry — {selectedVendor}</div>
+            <label style={labelStyle}>Type</label>
+            <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+              {["purchase", "payment"].map((t) => (
+                <button key={t} onClick={() => setForm((f) => ({ ...f, type: t }))} style={{ flex: 1, padding: "11px 0", borderRadius: "var(--radius-md)", border: `2px solid ${form.type === t ? (t === "purchase" ? "var(--danger)" : "var(--success)") : "var(--gray-300)"}`, background: form.type === t ? (t === "purchase" ? "var(--danger-100)" : "var(--success-100)") : "var(--white)", fontWeight: 700, fontSize: 14, cursor: "pointer", color: form.type === t ? (t === "purchase" ? "var(--danger-700)" : "var(--success-700)") : "var(--gray-600)" }}>
+                  {t === "purchase" ? "🛒 Purchase (Owe)" : "💸 Payment (Paid)"}
+                </button>
+              ))}
+            </div>
+            <label style={labelStyle}>Amount (Rs)*</label>
+            <input type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="0" style={{ ...inputStyle, marginBottom: 10 }} />
+            <label style={labelStyle}>Date</label>
+            <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} style={{ ...inputStyle, marginBottom: 10 }} />
+            <label style={labelStyle}>Note (optional)</label>
+            <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="e.g. feed delivery, partial payment" style={{ ...inputStyle, marginBottom: 14 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={save} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>{saving ? "Saving…" : "Save"}</button>
+              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "12px", borderRadius: "var(--radius-md)", border: "1px solid var(--gray-300)", background: "var(--white)", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--gray-700)" }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {vendorRows.map((row) => (
+          <div key={row.id} style={{ ...card, display: "flex", alignItems: "center", gap: 12, marginBottom: 10, borderLeft: `4px solid ${row.type === "purchase" ? "var(--danger)" : "var(--success)"}` }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: row.type === "purchase" ? "var(--danger-100)" : "var(--success-100)", color: row.type === "purchase" ? "var(--danger-700)" : "var(--success-700)" }}>
+                  {row.type === "purchase" ? "Purchase" : "Payment"}
+                </span>
+                <span style={{ fontSize: 13, color: "var(--gray-500)" }}>{row.date}</span>
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: row.type === "purchase" ? "var(--danger-700)" : "var(--success-700)", marginTop: 4 }}>
+                {row.type === "purchase" ? "+" : "-"} Rs {fmt(row.amount)}
+              </div>
+              {row.note && <div style={{ fontSize: 13, color: "var(--gray-500)", marginTop: 2 }}>{row.note}</div>}
+            </div>
+            <button onClick={() => del(row.id)} style={{ background: "none", border: "none", color: "var(--gray-400)", cursor: "pointer", padding: 6 }}>✕</button>
+          </div>
+        ))}
+        {vendorRows.length === 0 && <div style={{ textAlign: "center", color: "var(--gray-400)", padding: 24 }}>No entries yet</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--gray-800)" }}>Vendor Ledger</h2>
+        <button onClick={() => { setForm(blank()); setShowForm(true); }} style={{ ...primaryBtn }}>+ Add</button>
+      </div>
+
+      {showForm && (
+        <div style={{ ...card, border: "2px solid var(--primary)" }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "var(--primary-700)", marginBottom: 12 }}>New Entry</div>
+          <label style={labelStyle}>Vendor Name*</label>
+          <input list="vendor-names" value={form.vendor_name} onChange={(e) => setForm((f) => ({ ...f, vendor_name: e.target.value }))} placeholder="e.g. Waqas Trader" style={{ ...inputStyle, marginBottom: 10 }} />
+          <datalist id="vendor-names">{knownVendors.map((n) => <option key={n} value={n} />)}</datalist>
+          <label style={labelStyle}>Type</label>
+          <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+            {["purchase", "payment"].map((t) => (
+              <button key={t} onClick={() => setForm((f) => ({ ...f, type: t }))} style={{ flex: 1, padding: "11px 0", borderRadius: "var(--radius-md)", border: `2px solid ${form.type === t ? (t === "purchase" ? "var(--danger)" : "var(--success)") : "var(--gray-300)"}`, background: form.type === t ? (t === "purchase" ? "var(--danger-100)" : "var(--success-100)") : "var(--white)", fontWeight: 700, fontSize: 14, cursor: "pointer", color: form.type === t ? (t === "purchase" ? "var(--danger-700)" : "var(--success-700)") : "var(--gray-600)" }}>
+                {t === "purchase" ? "🛒 Purchase" : "💸 Payment"}
+              </button>
+            ))}
+          </div>
+          <label style={labelStyle}>Amount (Rs)*</label>
+          <input type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="0" style={{ ...inputStyle, marginBottom: 10 }} />
+          <label style={labelStyle}>Date</label>
+          <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} style={{ ...inputStyle, marginBottom: 10 }} />
+          <label style={labelStyle}>Note (optional)</label>
+          <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="details about this entry" style={{ ...inputStyle, marginBottom: 14 }} />
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={save} disabled={saving} style={{ ...primaryBtn, flex: 1, justifyContent: "center" }}>{saving ? "Saving…" : "Save"}</button>
+            <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "12px", borderRadius: "var(--radius-md)", border: "1px solid var(--gray-300)", background: "var(--white)", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--gray-700)" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {summary.length === 0 && !showForm && (
+        <div style={{ ...card, textAlign: "center", color: "var(--gray-500)", padding: 40 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🏪</div>
+          <div style={{ fontWeight: 700 }}>No vendors yet</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Tap + Add to record a purchase or payment</div>
+        </div>
+      )}
+
+      {summary.map((s) => {
+        const balance = s.purchases - s.payments;
+        return (
+          <div key={s.name} onClick={() => setSelectedVendor(s.name)} style={{ ...card, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, borderLeft: `4px solid ${balance > 0 ? "var(--danger)" : "var(--success)"}` }}>
+            <div style={{ width: 42, height: 42, borderRadius: "50%", background: balance > 0 ? "var(--danger-100)" : "var(--success-100)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🏪</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "var(--gray-800)" }}>{s.name}</div>
+              <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>Bought: Rs {fmt(s.purchases)} · Paid: Rs {fmt(s.payments)}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: balance > 0 ? "var(--danger-700)" : "var(--success-700)" }}>Rs {fmt(Math.abs(balance))}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: balance > 0 ? "var(--danger-700)" : "var(--success-700)" }}>{balance > 0 ? "Owed" : "Clear ✓"}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 const stepBtn = { border: "1px solid #cdd6e6", background: "white", width: 38, height: 38, borderRadius: 10, fontSize: 22, fontWeight: 700, color: "#1e3a5f", cursor: "pointer", lineHeight: 1 };
